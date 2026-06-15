@@ -614,7 +614,203 @@ function renderPipeEditor(hole) {
         <label>Pipe bearing<input data-pipe-field="pipeBearing" value="${escapeHtml(pipe.pipeBearing)}" inputmode="decimal" placeholder="Approx. degrees"></label>
         <label>Pipe end 1 length<input data-pipe-field="pipeStartDistance" value="${escapeHtml(pipe.pipeStartDistance)}" inputmode="decimal" placeholder="Map length"></label>
         <label>Pipe end 2 length<input data-pipe-field="pipeEndDistance" value="${escapeHtml(pipe.pipeEndDistance)}" inputmode="decimal" placeholder="Map length"></label>
-      </…1653 tokens truncated…) : "";
+      </div>
+    </section>
+  `).join("");
+}
+
+function addPipe() {
+  const hole = selectedHole();
+  if (!hole) return;
+  hole.pipes.push(blankPipe());
+  syncPrimaryPipeLegacy(hole);
+  save();
+  renderPipeEditor(hole);
+  renderPins();
+  renderReport();
+}
+
+function removePipe(id) {
+  const hole = selectedHole();
+  if (!hole || hole.pipes.length <= 1) return;
+  hole.pipes = hole.pipes.filter((pipe) => pipe.id !== id);
+  syncPrimaryPipeLegacy(hole);
+  save();
+  renderPipeEditor(hole);
+  renderPins();
+  renderReport();
+}
+
+function updatePipe(event) {
+  const input = event.target.closest("[data-pipe-field]");
+  if (!input) return;
+  const card = input.closest("[data-pipe-id]");
+  const hole = selectedHole();
+  const pipeId = card && card.dataset.pipeId;
+  const pipe = hole && hole.pipes.find((item) => item.id === pipeId);
+  if (!pipe) return;
+  pipe[input.dataset.pipeField] = input.value;
+  syncPrimaryPipeLegacy(hole);
+  save();
+  renderPins();
+  renderReport();
+}
+
+function renderPhotos(hole) {
+  $("photoGrid").innerHTML = (hole.photos || [])
+    .map(
+      (photo, index) => `
+        <figure>
+          <img src="${photo.src}" alt="${escapeHtml(photo.name || `Photo ${index + 1}`)}">
+          <figcaption>${escapeHtml(photo.name || `Photo ${index + 1}`)}</figcaption>
+        </figure>
+      `,
+    )
+    .join("");
+}
+
+function renderPins() {
+  const hole = selectedHole();
+  const mapZoom = (hole && hole.mapZoom) || state.mapZoom || 1;
+  const labelZoom = markerZoom(mapZoom);
+
+  $("pinLayer").innerHTML = hole ? [hole]
+    .filter((hole) => Number.isFinite(hole.mapX) && Number.isFinite(hole.mapY))
+    .map((hole) => {
+      const selected = hole.id === state.selectedId ? " selected" : "";
+      return `
+        <span class="th-marker${selected}" style="left:${hole.mapX}%;top:${hole.mapY}%;--marker-zoom:${labelZoom}">
+          ${hole.pipes.map((pipe) => pipeOverlay(pipe, "pipe-bearing", "px", labelZoom, true)).join("")}
+          <span class="th-crosshair" aria-hidden="true">
+            <svg viewBox="-50 -50 100 100" focusable="false">
+              <circle cx="0" cy="0" r="22"></circle>
+              <line x1="-36" y1="0" x2="36" y2="0"></line>
+              <line x1="0" y1="-36" x2="0" y2="36"></line>
+            </svg>
+          </span>
+          <span class="th-label">${mapPointLabel(hole)}</span>
+        </span>
+      `;
+    })
+    .join("") : "";
+}
+
+function mapUtilityLabel(hole) {
+  return hole.utilityType || hole.holeName || "TH";
+}
+
+function mapPointLabel(hole) {
+  return `<b><span>${escapeHtml(hole.holeName || "TH")}</span><span>${escapeHtml(mapUtilityLabel(hole))}</span></b>`;
+}
+
+function pipeOverlay(pipe, className, unit, labelZoom = 1, anchored = false) {
+  const bearing = normalizeBearing(pipe.pipeBearing);
+  if (bearing === null) return "";
+
+  const fallback = unit === "in" ? 0.8 : 95;
+  const start = pipeDisplayDistance(pipe.pipeStartDistance, fallback, unit);
+  const end = pipeDisplayDistance(pipe.pipeEndDistance, fallback, unit);
+
+  const scale = unit === "in" ? 96 : 1;
+  const startPx = start * scale;
+  const endPx = end * scale;
+
+  const rad = bearing * Math.PI / 180;
+  const dx = Math.sin(rad);
+  const dy = -Math.cos(rad);
+
+  const center = 500;
+  const x1 = center - dx * startPx;
+  const y1 = center - dy * startPx;
+  const x2 = center + dx * endPx;
+  const y2 = center + dy * endPx;
+
+  const isReport = className === "report-pipe-bearing";
+  const vectorClass = isReport ? "report-pipe-vector" : "pipe-vector";
+  const lineClass = isReport ? "report-pipe-vector-line" : "pipe-vector-line";
+
+  const positionStyle = anchored
+    ? `left:0;top:0;--marker-zoom:${labelZoom};--pipe-color:${pipeColorValue(pipe)}`
+    : `left:0;top:0;--marker-zoom:${labelZoom};--pipe-color:${pipeColorValue(pipe)}`;
+
+  return `
+    <span class="${vectorClass}" style="${positionStyle}">
+      <svg viewBox="0 0 1000 1000" aria-hidden="true" focusable="false">
+        <line class="${lineClass}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"></line>
+      </svg>
+    </span>
+  `;
+}
+
+function projectCoordinateWkid() {
+  const selected = state.project.coordinateSystem || "2236";
+  return selected === "custom" ? (state.project.customCoordinateSystem || "").trim() : selected;
+}
+
+async function convertToLatLong(easting, northing) {
+  const wkid = projectCoordinateWkid();
+  if (!wkid) throw new Error("Choose a coordinate system first.");
+
+  if (wkid === "4326") {
+    if (Math.abs(northing) > 90 || Math.abs(easting) > 180) {
+      throw new Error("Those N/E values are not lat/long. Choose the project State Plane/WKID first.");
+    }
+    return { lat: northing, lng: easting };
+  }
+
+  const params = new URLSearchParams({
+    inSR: wkid,
+    outSR: "4326",
+    f: "json",
+    geometries: JSON.stringify({
+      geometryType: "esriGeometryPoint",
+      geometries: [{ x: easting, y: northing }],
+    }),
+  });
+  const response = await fetch(`https://utility.arcgisonline.com/ArcGIS/rest/services/Geometry/GeometryServer/project?${params.toString()}`);
+  if (!response.ok) throw new Error("Coordinate conversion failed.");
+  const data = await response.json();
+  const point = data.geometries && data.geometries[0];
+  if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+    throw new Error((data.error && data.error.message) || "Coordinate conversion returned no point.");
+  }
+  if (Math.abs(point.y) > 90 || Math.abs(point.x) > 180) {
+    throw new Error("Converted coordinate is outside valid lat/long range. Check the coordinate system.");
+  }
+  return { lat: point.y, lng: point.x };
+}
+
+async function aerialFromCoordinates(pipeId) {
+  const hole = selectedHole();
+  if (!hole) return;
+  const pipe = hole.pipes.find((item) => item.id === pipeId) || hole.pipes[0];
+  if (!pipe) return;
+
+  const northing = numericValue(pipe.northing);
+  const easting = numericValue(pipe.easting);
+  if (northing === null || easting === null) {
+    $("mapTip").textContent = "Enter northing and easting for this pipe first.";
+    return;
+  }
+
+  $("mapTip").textContent = "Converting coordinates...";
+  let latLng;
+  try {
+    latLng = await convertToLatLong(easting, northing);
+  } catch (error) {
+    $("mapTip").textContent = error.message;
+    hole.mapImage = "";
+    save();
+    renderMapImage();
+    renderReport();
+    return;
+  }
+
+  const { lat, lng } = latLng;
+  const delta = 0.0018;
+  const bbox = [lng - delta, lat - delta, lng + delta, lat + delta].join(",");
+  hole.mapImage = esriExportUrl("World_Imagery", bbox, false);
+  hole.mapLabelImage = state.project.mapStyle === "hybrid" ? esriExportUrl("Reference/World_Boundaries_and_Places", bbox, true) : "";
   hole.mapZoom = 2;
   hole.mapX = 50;
   hole.mapY = 50;
@@ -1207,4 +1403,3 @@ if ("serviceWorker" in navigator) {
     }).catch(() => {});
   });
 }
-
