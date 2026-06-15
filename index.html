@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1f4f47">
+    <title>Test Hole Collector</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Field collection</p>
+        <h1>Test Hole Collector</h1>
+      </div>
+      <div class="topbar-actions">
+        <button id="addHoleBtn" class="primary" type="button">Add TH</button>
+        <button id="printBtn" type="button">Print</button>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <section class="panel project-panel" aria-labelledby="projectTitle">
+        <div class="panel-head">
+          <h2 id="projectTitle">Project</h2>
+          <span id="saveState" class="save-state">Saved</span>
+        </div>
+        <div class="project-switcher">
+          <label>
+            Project file
+            <select id="projectSelect"></select>
+          </label>
+          <div class="inline-actions">
+            <button id="newProjectBtn" type="button">New</button>
+            <button id="deleteProjectBtn" class="danger" type="button">Delete</button>
+          </div>
+        </div>
+        <div class="form-grid">
+          <label class="wide">
+            Project file name
+            <input id="projectFileName" autocomplete="off" placeholder="Gillespie-Test-Holes">
+          </label>
+          <label>
+            Project no.
+            <input id="projectNumber" autocomplete="off" placeholder="2026085">
+          </label>
+          <label>
+            Project name
+            <input id="projectName" autocomplete="off" placeholder="Gillespie Ave Test Holes">
+          </label>
+          <label>
+            Client
+            <input id="client" autocomplete="off" placeholder="Client / agency">
+          </label>
+          <label>
+            Crew
+            <input id="crew" autocomplete="off" placeholder="Initials">
+          </label>
+          <label>
+            Date
+            <input id="fieldDate" type="date">
+          </label>
+          <label>
+            Weather
+            <input id="weather" autocomplete="off" placeholder="Clear, wet, etc.">
+          </label>
+          <label>
+            Coordinate system
+            <select id="coordinateSystem">
+              <option value="4326">Lat/Long WGS84 (EPSG:4326)</option>
+              <option value="2236">NAD83 Florida East ftUS (EPSG:2236)</option>
+              <option value="2237">NAD83 Florida West ftUS (EPSG:2237)</option>
+              <option value="2238">NAD83 Florida North ftUS (EPSG:2238)</option>
+              <option value="3857">Web Mercator meters (EPSG:3857)</option>
+              <option value="custom">Custom WKID</option>
+            </select>
+          </label>
+          <label>
+            Custom WKID
+            <input id="customCoordinateSystem" inputmode="numeric" placeholder="e.g. 2236">
+          </label>
+          <label>
+            Aerial style
+            <select id="mapStyle">
+              <option value="imagery">Imagery only</option>
+              <option value="hybrid">Hybrid labels</option>
+            </select>
+          </label>
+          <label class="wide">
+            Location
+            <input id="location" autocomplete="off" placeholder="Street, subdivision, parcel, or station range">
+          </label>
+          <label class="wide">
+            Map link
+            <input id="mapLink" autocomplete="off" placeholder="Google Maps, ArcGIS Online, county GIS, or project web map URL">
+          </label>
+          <label class="wide">
+            Notes
+            <textarea id="projectNotes" rows="3" placeholder="General field notes"></textarea>
+          </label>
+        </div>
+      </section>
+
+      <section class="panel map-panel" aria-labelledby="mapTitle">
+        <div class="panel-head">
+          <div>
+            <h2 id="mapTitle">Map / Aerial</h2>
+            <p class="hint">Upload an aerial, then tap to place the selected test hole.</p>
+          </div>
+          <label class="file-button">
+            Image
+            <input id="mapImageInput" type="file" accept="image/*">
+          </label>
+        </div>
+        <div id="mapCanvas" class="map-canvas" role="button" tabindex="0" aria-label="Aerial map">
+          <img id="mapImage" alt="">
+          <img id="mapLabelImage" class="map-label-image" alt="">
+          <div id="mapPlaceholder" class="map-placeholder">
+            <strong>No aerial loaded</strong>
+            <span>Use a screenshot, drone image, GIS export, or plan sheet crop.</span>
+          </div>
+          <div id="pinLayer" class="pin-layer"></div>
+        </div>
+        <div class="map-tools">
+          <button id="clearMapBtn" type="button">Clear Image</button>
+          <button id="aerialFromCoordsBtn" type="button">Aerial From Pipe 1</button>
+          <button id="zoomOutBtn" type="button">Zoom -</button>
+          <button id="zoomInBtn" type="button">Zoom +</button>
+          <button id="zoomResetBtn" type="button">Reset</button>
+          <span id="mapTip">Selected TH: <b id="selectedHoleName">None</b></span>
+        </div>
+      </section>
+
+      <section class="panel holes-panel" aria-labelledby="holesTitle">
+        <div class="panel-head">
+          <h2 id="holesTitle">Test Holes</h2>
+          <div class="inline-actions">
+            <button id="duplicateHoleBtn" type="button">Duplicate</button>
+            <button id="deleteHoleBtn" class="danger" type="button">Delete</button>
+          </div>
+        </div>
+        <div id="holeList" class="hole-list" aria-label="Test hole list"></div>
+      </section>
+
+      <section class="panel entry-panel" aria-labelledby="entryTitle">
+        <div class="panel-head">
+          <h2 id="entryTitle">Selected Test Hole</h2>
+          <span id="holeCount" class="save-state">0 total</span>
+        </div>
+        <div id="emptyState" class="empty-state">
+          Add a test hole to start collecting.
+        </div>
+        <form id="holeForm" class="hole-form hidden">
+          <div class="form-grid">
+            <label>
+              TH label
+              <input id="holeName" autocomplete="off" placeholder="TH-1">
+            </label>
+            <label>
+              Expected utility
+              <select id="expectedUtility">
+                <option>Water</option>
+                <option>Reclaimed Water</option>
+                <option>Sewer</option>
+                <option>Storm</option>
+                <option>Gas</option>
+                <option>Electric</option>
+                <option>Telecom</option>
+                <option>Unknown</option>
+              </select>
+            </label>
+            <label>
+              Found utility
+              <select id="utilityType">
+                <option>Water</option>
+                <option>Reclaimed Water</option>
+                <option>Sewer</option>
+                <option>Storm</option>
+                <option>Gas</option>
+                <option>Electric</option>
+                <option>Telecom</option>
+                <option>Unknown</option>
+              </select>
+            </label>
+            <label>
+              Surface
+              <select id="surfaceType">
+                <option>Asphalt</option>
+                <option>Concrete</option>
+                <option>Grass</option>
+                <option>Dirt</option>
+                <option>Gravel</option>
+                <option>Other</option>
+              </select>
+            </label>
+            <label>
+              Method
+              <select id="method">
+                <option>Vacuum excavation</option>
+                <option>Hand dig</option>
+                <option>Probe</option>
+                <option>Visual</option>
+              </select>
+            </label>
+            <label>
+              Ground elevation
+              <input id="elevation" inputmode="decimal" placeholder="Ground elev.">
+            </label>
+            <label>
+              Top of pipe elevation
+              <input id="topPipeElevation" inputmode="decimal" placeholder="Top pipe elev.">
+            </label>
+            <label>
+              Depth to top of pipe
+              <input id="depthTop" inputmode="decimal" placeholder="Auto" readonly>
+            </label>
+            <div class="wide pipe-editor">
+              <div class="pipe-editor-head">
+                <h3>Pipes</h3>
+                <button id="addPipeBtn" type="button">Add Pipe</button>
+              </div>
+              <div id="pipeList" class="pipe-list"></div>
+            </div>
+            <label class="wide">
+              Description
+              <textarea id="description" rows="3" placeholder="Observed utility, offsets, condition, conflicts"></textarea>
+            </label>
+            <label class="wide">
+              Field notes
+              <textarea id="holeNotes" rows="3" placeholder="Sketch notes, measurements, remarks"></textarea>
+            </label>
+          </div>
+
+          <div class="photo-row">
+            <label class="file-button">
+              Camera Roll
+              <input id="photoRollInput" type="file" accept="image/*" multiple>
+            </label>
+            <button id="clearPhotosBtn" type="button">Clear Photos</button>
+          </div>
+          <div id="photoGrid" class="photo-grid"></div>
+        </form>
+      </section>
+
+      <section class="panel export-panel" aria-labelledby="exportTitle">
+        <div class="panel-head">
+          <h2 id="exportTitle">Deliverable</h2>
+        </div>
+        <div class="export-actions">
+          <button id="refreshReportBtn" type="button">Refresh Preview</button>
+          <button id="csvBtn" type="button">CSV</button>
+          <button id="geoJsonBtn" type="button">GeoJSON</button>
+          <button id="openProjectMapBtn" type="button">Open Map</button>
+          <button id="emailPdfBtn" type="button">Email PDF</button>
+          <button id="exportProjectBtn" type="button">Export Project</button>
+          <button id="jsonBtn" type="button">Backup</button>
+          <label class="file-button">
+            Restore
+            <input id="jsonInput" type="file" accept="application/json">
+          </label>
+        </div>
+        <div id="reportPreview" class="report-preview"></div>
+      </section>
+    </main>
+
+    <section id="printReport" class="print-report" aria-label="Printable report"></section>
+
+    <script src="app.js"></script>
+  </body>
+</html>
+
