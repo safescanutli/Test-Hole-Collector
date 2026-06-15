@@ -1488,23 +1488,30 @@ textarea {
 
 @media print {
   .print-report > .sheet {
+    position: relative !important;
     display: block !important;
     width: 8.5in !important;
-    height: 10.94in !important;
+    height: 10in !important;
     min-height: 0 !important;
-    max-height: 10.94in !important;
+    max-height: 10in !important;
     margin: 0 !important;
-    padding: 0.07in !important;
+    padding: 0 !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
     break-inside: avoid-page !important;
     page-break-inside: avoid !important;
+    -webkit-column-break-inside: avoid !important;
   }
 
   .print-report .sheet-frame {
-    height: 10.80in !important;
-    max-height: 10.80in !important;
+    position: absolute !important;
+    inset: 0.07in !important;
+    width: auto !important;
+    height: 9.86in !important;
+    max-height: 9.86in !important;
     min-height: 0 !important;
+    box-sizing: border-box !important;
     overflow: hidden !important;
+    contain: layout paint !important;
   }
 }
