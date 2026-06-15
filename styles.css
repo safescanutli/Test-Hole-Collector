@@ -1002,6 +1002,81 @@ textarea {
   }
 }
 
+/* Authoritative two-page Letter output, including mobile print engines. */
+@page {
+  size: 8.5in 11in;
+  margin: 0;
+}
+
+@media print {
+  html,
+  body {
+    width: 8.5in !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .print-report {
+    display: block !important;
+    width: 8.5in !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .print-report > .sheet {
+    display: block !important;
+    width: 8.5in !important;
+    height: 10.94in !important;
+    min-height: 0 !important;
+    max-height: 10.94in !important;
+    margin: 0 !important;
+    padding: 0.07in !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+    break-after: page !important;
+    page-break-after: always !important;
+  }
+
+  .print-report > .sheet:last-child {
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+
+  .print-report .sheet-frame {
+    width: 100% !important;
+    height: 10.80in !important;
+    min-height: 0 !important;
+    max-height: 10.80in !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .print-report .first-page-frame {
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto !important;
+  }
+
+  .print-report .photo-page-frame {
+    grid-template-rows: auto auto minmax(0, 1fr) !important;
+  }
+
+  .print-report .drawing-area,
+  .print-report .first-page-map,
+  .print-report .report-map,
+  .print-report .photo-page-grid {
+    min-height: 0 !important;
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+}
+
 /* PATCH: marker-centered zoom */
 .map-canvas {
   overflow: auto !important;
@@ -1051,20 +1126,24 @@ textarea {
   .print-report {
     display: block !important;
     width: 8.5in !important;
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
+    overflow: visible !important;
   }
 
   .sheet {
     width: 8.5in !important;
-    height: 11in !important;
+    height: 10.96in !important;
     min-height: 0 !important;
     margin: 0 !important;
-    padding: 0.10in !important;
+    padding: 0.08in !important;
     border: 0 !important;
     box-shadow: none !important;
     box-sizing: border-box !important;
     overflow: hidden !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
     break-after: page !important;
     page-break-after: always !important;
   }
@@ -1096,6 +1175,17 @@ textarea {
   .report-map {
     min-height: 0 !important;
     height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  .report-table th,
+  .report-table td {
+    padding-top: 3px !important;
+    padding-bottom: 3px !important;
+  }
+
+  .sheet-notes p {
+    max-height: 0.42in !important;
     overflow: hidden !important;
   }
 }
@@ -1392,6 +1482,29 @@ textarea {
   .report-map {
     min-height: 0 !important;
     height: 100% !important;
+    overflow: hidden !important;
+  }
+}
+
+@media print {
+  .print-report > .sheet {
+    display: block !important;
+    width: 8.5in !important;
+    height: 10.94in !important;
+    min-height: 0 !important;
+    max-height: 10.94in !important;
+    margin: 0 !important;
+    padding: 0.07in !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+  }
+
+  .print-report .sheet-frame {
+    height: 10.80in !important;
+    max-height: 10.80in !important;
+    min-height: 0 !important;
     overflow: hidden !important;
   }
 }
