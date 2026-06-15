@@ -626,26 +626,7 @@ function addPipe() {
   renderReport();
 }
 
-function removePipe(id)…1406 tokens truncated…  return;
-  }
-
-  $("mapTip").textContent = "Converting coordinates...";
-  let latLng;
-  try {
-    latLng = await convertToLatLong(easting, northing);
-  } catch (error) {
-    $("mapTip").textContent = error.message;
-    hole.mapImage = "";
-    save();
-    renderMapImage();
-    renderReport();
-    return;
-  }
-
-  const { lat, lng } = latLng;
-  const delta = 0.0018;
-  const bbox = [lng - delta, lat - delta, lng + delta, lat + delta].join(",");
-  hole.mapImage = esriExportUrl("World_Imagery", bbox, false);
+function removePipe(id)…1526 tokens truncated…ld_Imagery", bbox, false);
   hole.mapLabelImage = state.project.mapStyle === "hybrid" ? esriExportUrl("Reference/World_Boundaries_and_Places", bbox, true) : "";
   hole.mapZoom = 2;
   hole.mapX = 50;
@@ -1188,10 +1169,29 @@ function bindEvents() {
   $("jsonInput").addEventListener("change", restoreJson);
 }
 
-bindEvents();
-hydrate().catch(() => {
-  $("saveState").textContent = "Storage unavailable";
-});
+async function initializeApp() {
+  const addButton = $("addHoleBtn");
+  if (addButton) addButton.disabled = true;
+
+  try {
+    await hydrate();
+  } catch {
+    activeProjectId = activeProjectId || uid();
+    projectRecords = projectRecords.length ? projectRecords : [{
+      id: activeProjectId,
+      name: "Untitled Project",
+      updatedAt: new Date().toISOString(),
+    }];
+    applyProjectData(blankProjectState());
+    render();
+    $("saveState").textContent = "Temporary session";
+  }
+
+  bindEvents();
+  if (addButton) addButton.disabled = false;
+}
+
+initializeApp();
 
 window.addEventListener("pagehide", () => {
   clearTimeout(saveTimer);
