@@ -1260,6 +1260,69 @@ function emailPdf() {
   window.location.href = `mailto:?subject=${subject}&body=${body}`;
 }
 
+async function savePdf() {
+  if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
+    alert("PDF tools did not load. Check your internet connection and try again.");
+    return;
+  }
+
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const pdfWindow = isIos ? window.open("", "_blank") : null;
+  if (pdfWindow) {
+    pdfWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Creating PDF...</p>");
+  }
+
+  const button = $("pdfBtn");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Creating PDF...";
+  renderReport();
+
+  const report = $("printReport");
+  report.classList.add("pdf-export-active");
+
+  try {
+    const sheets = Array.from(report.children).filter((element) => element.classList.contains("sheet"));
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter", compress: true });
+
+    for (let index = 0; index < sheets.length; index += 1) {
+      const canvas = await window.html2canvas(sheets[index], {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        windowWidth: 816,
+      });
+      if (index > 0) pdf.addPage("letter", "portrait");
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 8.5, 11, undefined, "FAST");
+    }
+
+    const filename = `${safeFilePart(state.project.projectFileName || state.project.projectNumber || state.project.projectName)}.pdf`;
+    const blob = pdf.output("blob");
+    const url = URL.createObjectURL(blob);
+
+    if (pdfWindow) {
+      pdfWindow.location.href = url;
+    } else {
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) {
+    if (pdfWindow) pdfWindow.close();
+    alert(`PDF creation failed: ${error.message}`);
+  } finally {
+    report.classList.remove("pdf-export-active");
+    button.disabled = false;
+    button.textContent = originalText;
+  }
+}
+
 function download(name, content, type) {
   const blob = new Blob([content], { type });
   const url = URL.createObjectURL(blob);
@@ -1349,6 +1412,7 @@ function bindEvents() {
     renderReport();
     window.print();
   });
+  $("pdfBtn").addEventListener("click", savePdf);
   $("csvBtn").addEventListener("click", exportCsv);
   $("geoJsonBtn").addEventListener("click", exportGeoJson);
   $("openProjectMapBtn").addEventListener("click", openProjectMap);

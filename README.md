@@ -38,4 +38,3 @@ The app sends the selected hole's easting/northing to ArcGIS GeometryServer, con
 ## Project Files
 
 Use `Export Project` to save the current project as a `.thproject.json` file. That file can be kept in a local project folder and restored later with `Restore` for office edits. Projects are still stored locally per device/browser unless a cloud database is added later.
-

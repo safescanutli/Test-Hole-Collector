@@ -930,6 +930,39 @@ textarea {
   display: none;
 }
 
+.print-report.pdf-export-active {
+  position: fixed !important;
+  left: -10000px !important;
+  top: 0 !important;
+  display: block !important;
+  width: 8.5in !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #fff !important;
+  z-index: -1 !important;
+}
+
+.print-report.pdf-export-active > .sheet {
+  display: block !important;
+  width: 8.5in !important;
+  height: 11in !important;
+  min-height: 11in !important;
+  max-height: 11in !important;
+  margin: 0 !important;
+  padding: 0.10in !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.print-report.pdf-export-active .sheet-frame {
+  height: 10.80in !important;
+  min-height: 0 !important;
+  max-height: 10.80in !important;
+  overflow: hidden !important;
+}
+
 @media (max-width: 960px) {
   .app-shell {
     grid-template-columns: 1fr;
