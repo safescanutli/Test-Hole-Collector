@@ -94,17 +94,18 @@ function defaultProject() {
 }
 
 const $ = (id) => document.getElementById(id);
+const hasOwn = (object, property) => Object.prototype.hasOwnProperty.call(object, property);
 
 function uid() {
   return crypto.randomUUID ? crypto.randomUUID() : `id-${Date.now()}-${Math.random()}`;
 }
 
 function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+  return String(value === null || value === undefined ? "" : value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
 function selectedHole() {
@@ -167,7 +168,7 @@ function blankPipe(source = {}) {
 }
 
 function syncPrimaryPipeLegacy(hole) {
-  const pipe = hole.pipes?.[0] || blankPipe();
+  const pipe = (hole.pipes && hole.pipes[0]) || blankPipe();
   hole.utilitySize = pipe.utilitySize;
   hole.material = pipe.material;
   hole.pipeColor = pipe.pipeColor;
@@ -234,12 +235,12 @@ function normalizeProjectData(data) {
   normalized.holes = Array.isArray(normalized.holes) ? normalized.holes : [];
   if (!normalized.holes.length) normalized.holes = [blankHole(1)];
   normalized.holes.forEach((hole) => {
-    if (!Object.hasOwn(hole, "expectedUtility")) hole.expectedUtility = hole.utilityType || "Water";
-    if (!Object.hasOwn(hole, "topPipeElevation")) hole.topPipeElevation = "";
-    if (!Object.hasOwn(hole, "pipeColor")) hole.pipeColor = "Blue";
-    if (!Object.hasOwn(hole, "pipeBearing")) hole.pipeBearing = "";
-    if (!Object.hasOwn(hole, "pipeStartDistance")) hole.pipeStartDistance = hole.pipeDistance || "";
-    if (!Object.hasOwn(hole, "pipeEndDistance")) hole.pipeEndDistance = hole.pipeDistance || "";
+    if (!hasOwn(hole, "expectedUtility")) hole.expectedUtility = hole.utilityType || "Water";
+    if (!hasOwn(hole, "topPipeElevation")) hole.topPipeElevation = "";
+    if (!hasOwn(hole, "pipeColor")) hole.pipeColor = "Blue";
+    if (!hasOwn(hole, "pipeBearing")) hole.pipeBearing = "";
+    if (!hasOwn(hole, "pipeStartDistance")) hole.pipeStartDistance = hole.pipeDistance || "";
+    if (!hasOwn(hole, "pipeEndDistance")) hole.pipeEndDistance = hole.pipeDistance || "";
     if (!Array.isArray(hole.pipes) || !hole.pipes.length) {
       hole.pipes = [blankPipe(hole)];
     } else {
@@ -248,12 +249,12 @@ function normalizeProjectData(data) {
         : pipe));
     }
     syncPrimaryPipeLegacy(hole);
-    if (!Object.hasOwn(hole, "mapImage")) hole.mapImage = "";
-    if (!Object.hasOwn(hole, "mapLabelImage")) hole.mapLabelImage = "";
-    if (!Object.hasOwn(hole, "mapZoom")) hole.mapZoom = 1;
+    if (!hasOwn(hole, "mapImage")) hole.mapImage = "";
+    if (!hasOwn(hole, "mapLabelImage")) hole.mapLabelImage = "";
+    if (!hasOwn(hole, "mapZoom")) hole.mapZoom = 1;
     updateCalculatedDepth(hole);
   });
-  normalized.selectedId = normalized.selectedId || normalized.holes[0]?.id || null;
+  normalized.selectedId = normalized.selectedId || (normalized.holes[0] && normalized.holes[0].id) || null;
   return normalized;
 }
 
@@ -267,7 +268,8 @@ function applyProjectData(data) {
 }
 
 function projectDisplayName(data = state) {
-  return data.project?.projectFileName || [data.project?.projectNumber, data.project?.projectName].filter(Boolean).join(" - ") || "Untitled Project";
+  const project = data.project || {};
+  return project.projectFileName || [project.projectNumber, project.projectName].filter(Boolean).join(" - ") || "Untitled Project";
 }
 
 function saveProjectIndex() {
@@ -405,7 +407,8 @@ function deleteHole() {
   const index = state.holes.findIndex((hole) => hole.id === state.selectedId);
   if (index < 0) return;
   state.holes.splice(index, 1);
-  state.selectedId = state.holes[Math.max(0, index - 1)]?.id || state.holes[0]?.id || null;
+  const previousHole = state.holes[Math.max(0, index - 1)];
+  state.selectedId = (previousHole && previousHole.id) || (state.holes[0] && state.holes[0].id) || null;
   save();
   render();
 }
@@ -469,9 +472,9 @@ async function deleteProject() {
 
 function renderMapImage() {
   const hole = selectedHole();
-  const mapImage = hole?.mapImage || state.mapImage || "";
-  const mapLabelImage = hole?.mapLabelImage || "";
-  const mapZoom = hole?.mapZoom || state.mapZoom || 1;
+  const mapImage = (hole && hole.mapImage) || state.mapImage || "";
+  const mapLabelImage = (hole && hole.mapLabelImage) || "";
+  const mapZoom = (hole && hole.mapZoom) || state.mapZoom || 1;
   const canvas = $("mapCanvas");
   const image = $("mapImage");
   const labelImage = $("mapLabelImage");
@@ -550,7 +553,8 @@ function markerZoom(mapZoom) {
 function renderHoleList() {
   $("holeCount").textContent = `${state.holes.length} total`;
   const selectedName = $("selectedHoleName");
-  if (selectedName) selectedName.textContent = selectedHole()?.holeName || "None";
+  const currentHole = selectedHole();
+  if (selectedName) selectedName.textContent = (currentHole && currentHole.holeName) || "None";
   $("holeList").innerHTML = state.holes
     .map((hole) => {
       const selected = hole.id === state.selectedId ? " selected" : "";
@@ -610,24 +614,7 @@ function renderPipeEditor(hole) {
         <label>Pipe bearing<input data-pipe-field="pipeBearing" value="${escapeHtml(pipe.pipeBearing)}" inputmode="decimal" placeholder="Approx. degrees"></label>
         <label>Pipe end 1 length<input data-pipe-field="pipeStartDistance" value="${escapeHtml(pipe.pipeStartDistance)}" inputmode="decimal" placeholder="Map length"></label>
         <label>Pipe end 2 length<input data-pipe-field="pipeEndDistance" value="${escapeHtml(pipe.pipeEndDistance)}" inputmode="decimal" placeholder="Map length"></label>
-      </div>
-    </section>
-  `).join("");
-}
-
-function addPipe() {
-  const hole = selectedHole();
-  if (!hole) return;
-  hole.pipes.push(blankPipe());
-  syncPrimaryPipeLegacy(hole);
-  save();
-  renderPipeEditor(hole);
-  renderPins();
-  renderReport();
-}
-
-function removePipe(id)…1526 tokens truncated…ld_Imagery", bbox, false);
-  hole.mapLabelImage = state.project.mapStyle === "hybrid" ? esriExportUrl("Reference/World_Boundaries_and_Places", bbox, true) : "";
+      </…1653 tokens truncated…) : "";
   hole.mapZoom = 2;
   hole.mapX = 50;
   hole.mapY = 50;
@@ -956,7 +943,7 @@ function exportCsv() {
   ];
   const rows = [headers, ...state.holes.map((hole) => headers.map((header) => header === "pipes"
     ? hole.pipes.map((pipe, index) => `Pipe ${index + 1}: N ${pipe.northing} E ${pipe.easting} ${pipe.utilitySize} ${pipe.material} ${pipeColorLabel(pipe)} ${pipeDirectionPair(pipe)}`.trim()).join(" | ")
-    : hole[header] ?? ""))];
+    : (hole[header] === null || hole[header] === undefined ? "" : hole[header])))];
   download(
     `${state.project.projectNumber || "test-holes"}.csv`,
     rows.map((row) => row.map(csvCell).join(",")).join("\n"),
@@ -965,7 +952,7 @@ function exportCsv() {
 }
 
 function csvCell(value) {
-  const text = String(value).replaceAll('"', '""');
+  const text = String(value).replace(/"/g, '""');
   return /[",\n]/.test(text) ? `"${text}"` : text;
 }
 
@@ -1045,9 +1032,9 @@ function exportGeoJson() {
 }
 
 function projectMapUrl() {
-  const link = state.project.mapLink?.trim();
+  const link = (state.project.mapLink || "").trim();
   if (link) return link;
-  const location = state.project.location?.trim();
+  const location = (state.project.location || "").trim();
   return location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(location)}` : "";
 }
 
@@ -1124,8 +1111,14 @@ function bindEvents() {
   $("mapImageInput").addEventListener("change", loadMapImage);
   $("mapCanvas").addEventListener("click", placeSelectedHoleOnMap);
   $("aerialFromCoordsBtn").addEventListener("click", () => aerialFromCoordinates());
-  $("zoomOutBtn").addEventListener("click", () => setMapZoom((selectedHole()?.mapZoom || state.mapZoom || 1) - 0.25));
-  $("zoomInBtn").addEventListener("click", () => setMapZoom((selectedHole()?.mapZoom || state.mapZoom || 1) + 0.25));
+  $("zoomOutBtn").addEventListener("click", () => {
+    const hole = selectedHole();
+    setMapZoom(((hole && hole.mapZoom) || state.mapZoom || 1) - 0.25);
+  });
+  $("zoomInBtn").addEventListener("click", () => {
+    const hole = selectedHole();
+    setMapZoom(((hole && hole.mapZoom) || state.mapZoom || 1) + 0.25);
+  });
   $("zoomResetBtn").addEventListener("click", () => setMapZoom(1));
   $("clearMapBtn").addEventListener("click", () => {
     const hole = selectedHole();
