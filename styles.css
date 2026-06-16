@@ -896,7 +896,7 @@ textarea {
 .photo-page-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: repeat(var(--photo-rows, 1), minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 0.12in;
   min-height: 0;
   overflow: hidden;
@@ -909,13 +909,16 @@ textarea {
   margin: 0;
   border: 1px solid #111;
   background: #fff;
+  overflow: hidden;
 }
 
 .photo-page-grid img {
   width: 100%;
   height: 100%;
   min-height: 0;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center center;
+  background: #fff;
 }
 
 .photo-page-grid figcaption {
@@ -1547,4 +1550,12 @@ textarea {
     overflow: hidden !important;
     contain: layout paint !important;
   }
+}
+
+.photo-page-grid img,
+.print-report .photo-page-grid img,
+.print-report.pdf-export-active .photo-page-grid img {
+  object-fit: contain !important;
+  object-position: center center !important;
+  background: #fff !important;
 }

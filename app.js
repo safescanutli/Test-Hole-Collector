@@ -1066,7 +1066,7 @@ function pipeDisplayDistance(value, fallback, unit = "px") {
 }
 
 function buildHolePhotoSheet(hole, projectTitle, sheetNumber, totalSheets) {
-  const photos = hole.photos || [];
+  const photos = (hole.photos || []).slice(0, 4);
   const photoFigures = photos
     .map(
       (photo, index) => `
@@ -1083,7 +1083,7 @@ function buildHolePhotoSheet(hole, projectTitle, sheetNumber, totalSheets) {
       <div class="sheet-frame photo-page-frame">
         ${titleBlock(`${hole.holeName || "TEST HOLE"} PHOTOGRAPHS`, projectTitle, String(sheetNumber), totalSheets)}
         <div class="photo-page-title">${escapeHtml(hole.holeName || "Test Hole")} Photographs</div>
-        <div class="photo-page-grid" style="--photo-rows:${Math.max(1, Math.ceil(photos.length / 2))}">
+        <div class="photo-page-grid">
           ${photoFigures || `<div class="empty-photo">No photos attached.</div>`}
         </div>
       </div>
