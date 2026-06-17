@@ -1,6 +1,8 @@
 (function () {
   if (window.sharePdf) return;
 
+  let preparedPdfFile = null;
+
   function getButton(id) {
     return document.getElementById(id);
   }
@@ -19,6 +21,44 @@
     const project = window.state && window.state.project ? window.state.project : {};
     const raw = project.projectFileName || project.projectNumber || project.projectName || "test-hole-project";
     return `${safeFilePart(raw)}.pdf`;
+  }
+
+  function updateShareReadyState(isReady) {
+    ["sharePdfBtn", "sharePdfActionBtn"].forEach((id) => {
+      const button = getButton(id);
+      if (!button) return;
+      if (!button.dataset.originalText) button.dataset.originalText = button.textContent;
+      button.textContent = isReady ? "Tap to Share PDF" : button.dataset.originalText;
+      button.classList.toggle("primary", isReady || id === "sharePdfBtn");
+    });
+  }
+
+  async function sharePreparedPdf() {
+    if (!preparedPdfFile) return false;
+
+    if (navigator.canShare && navigator.canShare({ files: [preparedPdfFile] }) && navigator.share) {
+      await navigator.share({
+        title: preparedPdfFile.name.replace(/\.pdf$/i, ""),
+        text: "Test hole report PDF",
+        files: [preparedPdfFile],
+      });
+      preparedPdfFile = null;
+      updateShareReadyState(false);
+      return true;
+    }
+
+    const url = URL.createObjectURL(preparedPdfFile);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = preparedPdfFile.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    preparedPdfFile = null;
+    updateShareReadyState(false);
+    alert("Sharing files is not supported in this browser, so the PDF was downloaded instead.");
+    return true;
   }
 
   async function createReportPdfBlob(onProgress) {
@@ -71,6 +111,17 @@
   }
 
   async function sharePdf() {
+    if (preparedPdfFile) {
+      try {
+        await sharePreparedPdf();
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          alert("The browser blocked sharing. Tap Share PDF again and choose Egnyte from the share sheet.");
+        }
+      }
+      return;
+    }
+
     setPdfButtons(true, "Creating PDF...");
 
     try {
@@ -78,32 +129,16 @@
       const blob = await createReportPdfBlob((page, total) => {
         setPdfButtons(true, `PDF page ${page}/${total}...`);
       });
-      const file = new File([blob], filename, { type: "application/pdf" });
-
-      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
-        await navigator.share({
-          title: filename.replace(/\.pdf$/i, ""),
-          text: "Test hole report PDF",
-          files: [file],
-        });
-        return;
-      }
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
-      alert("Sharing files is not supported in this browser, so the PDF was downloaded instead.");
+      preparedPdfFile = new File([blob], filename, { type: "application/pdf" });
+      updateShareReadyState(true);
+      alert("PDF is ready. Tap Share PDF again to open the share sheet.");
     } catch (error) {
       if (error.name !== "AbortError") {
         alert(`PDF sharing failed: ${error.message}`);
       }
     } finally {
       setPdfButtons(false);
+      if (preparedPdfFile) updateShareReadyState(true);
     }
   }
 
