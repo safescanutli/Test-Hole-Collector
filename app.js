@@ -123,9 +123,34 @@ function formatDepth(value) {
 }
 
 function updateCalculatedDepth(hole) {
-  const ground = numericValue(hole.elevation);
-  const topPipe = numericValue(hole.topPipeElevation);
-  hole.depthTop = ground === null || topPipe === null ? "" : formatDepth(ground - topPipe);
+  if (!hole) return;
+  if (!Array.isArray(hole.pipes) || !hole.pipes.length) hole.pipes = [blankPipe(hole)];
+  const primaryPipe = hole.pipes[0];
+  primaryPipe.groundElevation = hole.elevation || primaryPipe.groundElevation || "";
+  primaryPipe.topPipeElevation = hole.topPipeElevation || primaryPipe.topPipeElevation || "";
+  updatePipeDepths(hole);
+}
+
+function updatePipeDepths(hole) {
+  if (!hole || !Array.isArray(hole.pipes) || !hole.pipes.length) return;
+  const groundElevation = hole.pipes[0].groundElevation || "";
+  const ground = numericValue(groundElevation);
+  hole.pipes.forEach((pipe) => {
+    const topPipe = numericValue(pipe.topPipeElevation);
+    pipe.depthTop = ground === null || topPipe === null ? "" : formatDepth(ground - topPipe);
+  });
+  hole.elevation = groundElevation;
+  hole.topPipeElevation = hole.pipes[0].topPipeElevation || "";
+  hole.depthTop = hole.pipes[0].depthTop || "";
+}
+
+function refreshPipeDepthInputs(hole) {
+  if (!hole) return;
+  document.querySelectorAll("#pipeList [data-pipe-id]").forEach((card) => {
+    const pipe = hole.pipes.find((item) => item.id === card.dataset.pipeId);
+    const depthInput = card.querySelector('[data-pipe-field="depthTop"]');
+    if (pipe && depthInput) depthInput.value = pipe.depthTop || "";
+  });
 }
 
 function normalizeBearing(value) {
@@ -158,6 +183,9 @@ function blankPipe(source = {}) {
     id: source.id || uid(),
     northing: source.northing || "",
     easting: source.easting || "",
+    groundElevation: source.groundElevation || source.elevation || "",
+    topPipeElevation: source.topPipeElevation || "",
+    depthTop: source.depthTop || "",
     utilitySize: source.utilitySize || "",
     material: source.material || "",
     pipeColor: source.pipeColor || "Blue",
@@ -177,6 +205,7 @@ function syncPrimaryPipeLegacy(hole) {
   hole.pipeEndDistance = pipe.pipeEndDistance;
   hole.northing = pipe.northing;
   hole.easting = pipe.easting;
+  updatePipeDepths(hole);
 }
 
 function blankHole(index = state.holes.length + 1) {
@@ -245,7 +274,14 @@ function normalizeProjectData(data) {
       hole.pipes = [blankPipe(hole)];
     } else {
       hole.pipes = hole.pipes.map((pipe, index) => blankPipe(index === 0
-        ? { northing: hole.northing, easting: hole.easting, ...pipe }
+        ? {
+          northing: hole.northing,
+          easting: hole.easting,
+          groundElevation: hole.elevation,
+          topPipeElevation: hole.topPipeElevation,
+          depthTop: hole.depthTop,
+          ...pipe,
+        }
         : pipe));
     }
     syncPrimaryPipeLegacy(hole);
@@ -357,8 +393,13 @@ function bindHoleFields() {
       if (!hole) return;
       hole[field] = input.value;
       if (field === "elevation" || field === "topPipeElevation") {
-        updateCalculatedDepth(hole);
+        if (!Array.isArray(hole.pipes) || !hole.pipes.length) hole.pipes = [blankPipe(hole)];
+        const primaryPipe = hole.pipes[0];
+        if (field === "elevation") primaryPipe.groundElevation = input.value;
+        if (field === "topPipeElevation") primaryPipe.topPipeElevation = input.value;
+        updatePipeDepths(hole);
         $("depthTop").value = hole.depthTop;
+        refreshPipeDepthInputs(hole);
       }
       save();
       renderHoleList();
@@ -608,6 +649,9 @@ function renderPipeEditor(hole) {
       <div class="form-grid pipe-form-grid">
         <label>Northing<input data-pipe-field="northing" value="${escapeHtml(pipe.northing)}" inputmode="decimal" placeholder="N"></label>
         <label>Easting<input data-pipe-field="easting" value="${escapeHtml(pipe.easting)}" inputmode="decimal" placeholder="E"></label>
+        <label>Ground elevation<input data-pipe-field="groundElevation" value="${escapeHtml(pipe.groundElevation)}" inputmode="decimal" placeholder="${index === 0 ? "Depth baseline" : "Ground elev."}"></label>
+        <label>Top of pipe elevation<input data-pipe-field="topPipeElevation" value="${escapeHtml(pipe.topPipeElevation)}" inputmode="decimal" placeholder="Top pipe elev."></label>
+        <label>Depth to top<input data-pipe-field="depthTop" value="${escapeHtml(pipe.depthTop)}" inputmode="decimal" placeholder="Auto" readonly></label>
         <label>Pipe / line size<input data-pipe-field="utilitySize" value="${escapeHtml(pipe.utilitySize)}" autocomplete="off" placeholder="8 in, 2 in, etc."></label>
         <label>Material<input data-pipe-field="material" value="${escapeHtml(pipe.material)}" autocomplete="off" placeholder="PVC, DIP, steel"></label>
         <label>Pipe color<input data-pipe-field="pipeColor" value="${escapeHtml(pipe.pipeColor)}" autocomplete="off" placeholder="Blue, orange, red, etc."></label>
@@ -650,6 +694,13 @@ function updatePipe(event) {
   const pipe = hole && hole.pipes.find((item) => item.id === pipeId);
   if (!pipe) return;
   pipe[input.dataset.pipeField] = input.value;
+  if (input.dataset.pipeField === "groundElevation" || input.dataset.pipeField === "topPipeElevation") {
+    updatePipeDepths(hole);
+    $("elevation").value = hole.elevation;
+    $("topPipeElevation").value = hole.topPipeElevation;
+    $("depthTop").value = hole.depthTop;
+    refreshPipeDepthInputs(hole);
+  }
   syncPrimaryPipeLegacy(hole);
   save();
   renderPins();
@@ -948,7 +999,12 @@ function holeDataRows(hole) {
     <tr>
       <th>Pipe ${index + 1} Northing</th><td>${escapeHtml(pipe.northing)}</td>
       <th>Pipe ${index + 1} Easting</th><td>${escapeHtml(pipe.easting)}</td>
-      <th></th><td></td>
+      <th>Ground Elev.</th><td>${escapeHtml(pipe.groundElevation)}</td>
+    </tr>
+    <tr>
+      <th>Top Pipe Elev.</th><td>${escapeHtml(pipe.topPipeElevation)}</td>
+      <th>Depth</th><td>${escapeHtml(pipe.depthTop)}</td>
+      <th>End Lengths</th><td>${escapeHtml([pipe.pipeStartDistance, pipe.pipeEndDistance].filter(Boolean).join(" / "))}</td>
     </tr>
   `).join("");
   return `
@@ -959,10 +1015,10 @@ function holeDataRows(hole) {
     </tr>
     <tr>
       <th>Surface</th><td>${escapeHtml(hole.surfaceType)}</td>
-      <th>Ground Elev.</th><td>${escapeHtml(hole.elevation)}</td>
-      <th>Top Pipe Elev.</th><td>${escapeHtml(hole.topPipeElevation)}</td>
+      <th>Pipe 1 Ground Elev.</th><td>${escapeHtml(hole.elevation)}</td>
+      <th>Pipe 1 Top Elev.</th><td>${escapeHtml(hole.topPipeElevation)}</td>
     </tr>
-    <tr><th>Depth / Method</th><td colspan="5">${escapeHtml([hole.depthTop, hole.method].filter(Boolean).join(" / "))}</td></tr>
+    <tr><th>Pipe 1 Depth / Method</th><td colspan="5">${escapeHtml([hole.depthTop, hole.method].filter(Boolean).join(" / "))}</td></tr>
     ${pipeRows}
     <tr>
       <th>Description</th><td colspan="5">${escapeHtml(hole.description)}</td>
@@ -1138,7 +1194,18 @@ function exportCsv() {
     "mapY",
   ];
   const rows = [headers, ...state.holes.map((hole) => headers.map((header) => header === "pipes"
-    ? hole.pipes.map((pipe, index) => `Pipe ${index + 1}: N ${pipe.northing} E ${pipe.easting} ${pipe.utilitySize} ${pipe.material} ${pipeColorLabel(pipe)} ${pipeDirectionPair(pipe)}`.trim()).join(" | ")
+    ? hole.pipes.map((pipe, index) => [
+      `Pipe ${index + 1}:`,
+      `N ${pipe.northing}`,
+      `E ${pipe.easting}`,
+      `Ground ${pipe.groundElevation}`,
+      `Top ${pipe.topPipeElevation}`,
+      `Depth ${pipe.depthTop}`,
+      pipe.utilitySize,
+      pipe.material,
+      pipeColorLabel(pipe),
+      pipeDirectionPair(pipe),
+    ].filter(Boolean).join(" ").trim()).join(" | ")
     : (hole[header] === null || hole[header] === undefined ? "" : hole[header])))];
   download(
     `${state.project.projectNumber || "test-holes"}.csv`,
@@ -1208,9 +1275,9 @@ function exportGeoJson() {
           direction: pipeDirectionPair(pipe),
           end1Length: pipe.pipeStartDistance,
           end2Length: pipe.pipeEndDistance,
-          groundElevation: hole.elevation,
-          topPipeElevation: hole.topPipeElevation,
-          depthTop: hole.depthTop,
+          groundElevation: pipe.groundElevation,
+          topPipeElevation: pipe.topPipeElevation,
+          depthTop: pipe.depthTop,
           description: hole.description,
           notes: hole.holeNotes,
           projectNumber: state.project.projectNumber,
@@ -1287,18 +1354,21 @@ async function savePdf() {
   try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter", compress: true });
+    const captureScale = isIos ? 1.35 : 1.6;
 
     for (let index = 0; index < sourceSheets.length; index += 1) {
+      button.textContent = `PDF page ${index + 1}/${sourceSheets.length}...`;
       stage.replaceChildren(sourceSheets[index].cloneNode(true));
-      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
 
       const sheet = stage.firstElementChild;
       const bounds = sheet.getBoundingClientRect();
       const canvas = await window.html2canvas(sheet, {
         backgroundColor: "#ffffff",
-        scale: 2,
+        scale: captureScale,
         useCORS: true,
         logging: false,
+        removeContainer: true,
         width: Math.ceil(bounds.width),
         height: Math.ceil(bounds.height),
         windowWidth: Math.ceil(bounds.width),
@@ -1306,7 +1376,7 @@ async function savePdf() {
         scrollY: 0,
       });
       if (index > 0) pdf.addPage("letter", "portrait");
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.92), "JPEG", 0, 0, 8.5, 11, undefined, "FAST");
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.86), "JPEG", 0, 0, 8.5, 11, undefined, "FAST");
     }
 
     const filename = `${safeFilePart(state.project.projectFileName || state.project.projectNumber || state.project.projectName)}.pdf`;
