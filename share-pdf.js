@@ -78,7 +78,8 @@
       const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter", compress: true });
-      const captureScale = isIos ? 1.35 : 1.6;
+      const captureScale = isIos ? 1.05 : 1.25;
+      const jpegQuality = isIos ? 0.68 : 0.72;
 
       for (let index = 0; index < sourceSheets.length; index += 1) {
         if (onProgress) onProgress(index + 1, sourceSheets.length);
@@ -101,7 +102,7 @@
         });
 
         if (index > 0) pdf.addPage("letter", "portrait");
-        pdf.addImage(canvas.toDataURL("image/jpeg", 0.86), "JPEG", 0, 0, 8.5, 11, undefined, "FAST");
+        pdf.addImage(canvas.toDataURL("image/jpeg", jpegQuality), "JPEG", 0, 0, 8.5, 11, undefined, "FAST");
       }
 
       return pdf.output("blob");
