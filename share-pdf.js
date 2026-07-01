@@ -33,6 +33,58 @@
     });
   }
 
+  function clampNumber(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function updateSelectedMapViewport() {
+    if (typeof window.selectedHole !== "function") return;
+    const hole = window.selectedHole();
+    const canvas = getButton("mapCanvas");
+    if (!hole || !canvas || !canvas.clientWidth || !canvas.clientHeight) return;
+
+    hole.mapViewLeft = canvas.scrollLeft / canvas.clientWidth * 100;
+    hole.mapViewTop = canvas.scrollTop / canvas.clientHeight * 100;
+  }
+
+  function installReportMapViewportOverride() {
+    if (window.reportMapLayerStyle && !window.reportMapLayerStyle.__usesFieldViewport) {
+      const originalReportMapLayerStyle = window.reportMapLayerStyle;
+      window.reportMapLayerStyle = function reportMapLayerStyleWithFieldViewport(hole, mapZoom) {
+        const zoom = Math.max(1, Number(mapZoom) || 1);
+        const widthPct = zoom * 100;
+        const heightPct = zoom * 100;
+
+        if (Number.isFinite(hole.mapViewLeft) && Number.isFinite(hole.mapViewTop)) {
+          const leftPct = clampNumber(-hole.mapViewLeft, 100 - widthPct, 0);
+          const topPct = clampNumber(-hole.mapViewTop, 100 - heightPct, 0);
+          return `--map-zoom:1;width:${widthPct}%;height:${heightPct}%;left:${leftPct}%;top:${topPct}%;`;
+        }
+
+        return originalReportMapLayerStyle(hole, mapZoom);
+      };
+      window.reportMapLayerStyle.__usesFieldViewport = true;
+    }
+  }
+
+  function installMapViewportSync() {
+    const canvas = getButton("mapCanvas");
+    if (!canvas || canvas.dataset.viewportSyncBound) return;
+    canvas.dataset.viewportSyncBound = "true";
+
+    let saveTimer = 0;
+    canvas.addEventListener("scroll", () => {
+      updateSelectedMapViewport();
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(() => {
+        if (typeof window.save === "function") window.save();
+        if (typeof window.renderReport === "function") window.renderReport();
+      }, 150);
+    }, { passive: true });
+
+    requestAnimationFrame(updateSelectedMapViewport);
+  }
+
   async function sharePreparedPdf() {
     if (!preparedPdfFile) return false;
 
@@ -91,6 +143,8 @@
       throw new Error("PDF tools did not load. Check your internet connection and try again.");
     }
 
+    updateSelectedMapViewport();
+    installReportMapViewportOverride();
     renderReport();
 
     const preview = getButton("reportPreview");
@@ -224,7 +278,10 @@
     if (topButton) topButton.addEventListener("click", sharePdf);
     if (actionButton) actionButton.addEventListener("click", sharePdf);
     if (pdfButton) pdfButton.addEventListener("click", savePdfWithLockedMarker, true);
+    installReportMapViewportOverride();
+    installMapViewportSync();
     installAddHoleFallback();
     setTimeout(installAddHoleFallback, 1000);
+    setTimeout(installMapViewportSync, 1000);
   });
 }());
