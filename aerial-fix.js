@@ -9,6 +9,62 @@
     return Number.isFinite(number) ? number : null;
   }
 
+  function formatDepth(value) {
+    return Number.isInteger(value) ? String(value) : value.toFixed(2);
+  }
+
+  function pipeCards() {
+    return Array.from(document.querySelectorAll("#pipeList [data-pipe-id]"));
+  }
+
+  function syncPipeDepths(hole) {
+    if (!hole || !Array.isArray(hole.pipes) || !hole.pipes.length) return;
+    const ground = numberValue(hole.pipes[0].groundElevation);
+    hole.pipes.forEach((pipe) => {
+      const topPipe = numberValue(pipe.topPipeElevation);
+      pipe.depthTop = ground === null || topPipe === null ? "" : formatDepth(ground - topPipe);
+    });
+    hole.elevation = hole.pipes[0].groundElevation || "";
+    hole.topPipeElevation = hole.pipes[0].topPipeElevation || "";
+    hole.depthTop = hole.pipes[0].depthTop || "";
+  }
+
+  function syncPipeCard(card, hole) {
+    if (!card || !hole || !Array.isArray(hole.pipes)) return null;
+    const pipe = hole.pipes.find((item) => item.id === card.dataset.pipeId);
+    if (!pipe) return null;
+
+    card.querySelectorAll("[data-pipe-field]").forEach((input) => {
+      pipe[input.dataset.pipeField] = input.value;
+    });
+    return pipe;
+  }
+
+  function syncPipeInputs() {
+    if (typeof selectedHole !== "function") return null;
+    const hole = selectedHole();
+    if (!hole) return null;
+
+    pipeCards().forEach((card) => syncPipeCard(card, hole));
+    syncPipeDepths(hole);
+
+    const elevation = byId("elevation");
+    const topPipeElevation = byId("topPipeElevation");
+    const depthTop = byId("depthTop");
+    if (elevation) elevation.value = hole.elevation || "";
+    if (topPipeElevation) topPipeElevation.value = hole.topPipeElevation || "";
+    if (depthTop) depthTop.value = hole.depthTop || "";
+
+    pipeCards().forEach((card) => {
+      const pipe = hole.pipes.find((item) => item.id === card.dataset.pipeId);
+      const depthInput = card.querySelector('[data-pipe-field="depthTop"]');
+      if (pipe && depthInput) depthInput.value = pipe.depthTop || "";
+    });
+
+    if (typeof save === "function") save();
+    return hole;
+  }
+
   function aerialUrl(service, bbox, transparent, format) {
     const params = new URLSearchParams({
       bbox,
@@ -65,9 +121,13 @@
   }
 
   async function loadAerialForPipe(pipeId) {
-    if (typeof selectedHole !== "function") return;
-    const hole = selectedHole();
+    const hole = syncPipeInputs();
     if (!hole) return;
+    if (pipeId) {
+      const card = pipeCards().find((item) => item.dataset.pipeId === pipeId);
+      syncPipeCard(card, hole);
+      syncPipeDepths(hole);
+    }
     const pipe = (hole.pipes || []).find((item) => item.id === pipeId) || (hole.pipes || [])[0];
     if (!pipe) return;
 
@@ -134,6 +194,13 @@
       event.stopImmediatePropagation();
       loadAerialForPipe(pipeButton ? pipeButton.dataset.pipeId : undefined);
     }, true);
+
+    const pipeList = byId("pipeList");
+    if (pipeList && !pipeList.dataset.pipeSyncBound) {
+      pipeList.dataset.pipeSyncBound = "true";
+      pipeList.addEventListener("input", syncPipeInputs, true);
+      pipeList.addEventListener("change", syncPipeInputs, true);
+    }
   }
 
   if (document.readyState === "loading") {
