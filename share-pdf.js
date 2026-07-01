@@ -1,4 +1,18 @@
 (function () {
+  window.esriExportUrl = function esriExportUrl(service, bbox, transparent) {
+    const params = new URLSearchParams({
+      bbox,
+      bboxSR: "4326",
+      imageSR: "4326",
+      size: "1100,800",
+      dpi: "96",
+      format: transparent ? "png32" : "jpg",
+      transparent: transparent ? "true" : "false",
+      f: "image",
+    });
+    return `https://services.arcgisonline.com/ArcGIS/rest/services/${service}/MapServer/export?${params.toString()}`;
+  };
+
   if (window.sharePdf) return;
 
   let preparedPdfFile = null;
