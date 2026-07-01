@@ -1,9 +1,9 @@
-const CACHE_NAME = "test-hole-collector-v115";
+const CACHE_NAME = "test-hole-collector-v116";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
-  "./pdf-fix.css",
+ "./pdf-fix.css",
   "./app.js",
   "./share-pdf.js",
   "./aerial-fix.js",
