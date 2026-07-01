@@ -61,6 +61,31 @@
     return true;
   }
 
+  function lockReportMarkerPositions(sourceSheet, targetSheet) {
+    if (!sourceSheet || !targetSheet) return;
+
+    const sourceMarkers = Array.from(sourceSheet.querySelectorAll(".report-th-marker"));
+    const targetMarkers = Array.from(targetSheet.querySelectorAll(".report-th-marker"));
+
+    sourceMarkers.forEach((sourceMarker, index) => {
+      const targetMarker = targetMarkers[index];
+      const sourceMap = sourceMarker.closest(".report-map");
+      const targetMap = targetMarker && targetMarker.closest(".report-map");
+      const targetLayer = targetMarker && targetMarker.closest(".report-map-layer");
+      if (!targetMarker || !sourceMap || !targetMap || !targetLayer) return;
+
+      const sourceMarkerRect = sourceMarker.getBoundingClientRect();
+      const sourceMapRect = sourceMap.getBoundingClientRect();
+      const targetMapRect = targetMap.getBoundingClientRect();
+      const targetLayerRect = targetLayer.getBoundingClientRect();
+      const xInMap = sourceMarkerRect.left - sourceMapRect.left;
+      const yInMap = sourceMarkerRect.top - sourceMapRect.top;
+
+      targetMarker.style.left = `${xInMap - (targetLayerRect.left - targetMapRect.left)}px`;
+      targetMarker.style.top = `${yInMap - (targetLayerRect.top - targetMapRect.top)}px`;
+    });
+  }
+
   async function createReportPdfBlob(onProgress) {
     if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
       throw new Error("PDF tools did not load. Check your internet connection and try again.");
@@ -68,8 +93,11 @@
 
     renderReport();
 
-    const report = getButton("printReport");
-    const sourceSheets = Array.from(report.children).filter((element) => element.classList.contains("sheet"));
+    const preview = getButton("reportPreview");
+    const printReport = getButton("printReport");
+    const sourceSheets = Array.from(preview.querySelectorAll(".sheet"));
+    const fallbackSheets = Array.from(printReport.children).filter((element) => element.classList.contains("sheet"));
+    const sheets = sourceSheets.length ? sourceSheets : fallbackSheets;
     const stage = document.createElement("div");
     stage.className = "pdf-render-stage";
     document.body.appendChild(stage);
@@ -81,12 +109,15 @@
       const captureScale = isIos ? 1.05 : 1.25;
       const jpegQuality = isIos ? 0.68 : 0.72;
 
-      for (let index = 0; index < sourceSheets.length; index += 1) {
-        if (onProgress) onProgress(index + 1, sourceSheets.length);
-        stage.replaceChildren(sourceSheets[index].cloneNode(true));
+      for (let index = 0; index < sheets.length; index += 1) {
+        if (onProgress) onProgress(index + 1, sheets.length);
+        stage.replaceChildren(sheets[index].cloneNode(true));
         await new Promise((resolve) => requestAnimationFrame(resolve));
 
         const sheet = stage.firstElementChild;
+        lockReportMarkerPositions(sheets[index], sheet);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+
         const bounds = sheet.getBoundingClientRect();
         const canvas = await window.html2canvas(sheet, {
           backgroundColor: "#ffffff",
@@ -143,12 +174,42 @@
     }
   }
 
+  async function savePdfWithLockedMarker(event) {
+    if (event) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+
+    setPdfButtons(true, "Creating PDF...");
+
+    try {
+      const filename = pdfFileName();
+      const blob = await createReportPdfBlob((page, total) => {
+        setPdfButtons(true, `PDF page ${page}/${total}...`);
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      alert(`PDF creation failed: ${error.message}`);
+    } finally {
+      setPdfButtons(false);
+    }
+  }
+
   window.sharePdf = sharePdf;
 
   window.addEventListener("load", () => {
     const topButton = getButton("sharePdfBtn");
     const actionButton = getButton("sharePdfActionBtn");
+    const pdfButton = getButton("pdfBtn");
     if (topButton) topButton.addEventListener("click", sharePdf);
     if (actionButton) actionButton.addEventListener("click", sharePdf);
+    if (pdfButton) pdfButton.addEventListener("click", savePdfWithLockedMarker, true);
   });
 }());
