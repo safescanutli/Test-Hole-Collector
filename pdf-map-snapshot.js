@@ -39,6 +39,51 @@
     });
   }
 
+  function markerAnchorInMap(marker, mapBounds) {
+    const pinLayer = byId("pinLayer");
+    if (!marker || !pinLayer) return null;
+
+    const leftPct = Number.parseFloat(marker.style.left);
+    const topPct = Number.parseFloat(marker.style.top);
+    const pinRect = pinLayer.getBoundingClientRect();
+    if (Number.isFinite(leftPct) && Number.isFinite(topPct) && pinRect.width && pinRect.height) {
+      return {
+        x: (pinRect.left - mapBounds.left) + ((leftPct / 100) * pinRect.width),
+        y: (pinRect.top - mapBounds.top) + ((topPct / 100) * pinRect.height),
+      };
+    }
+
+    const markerRect = marker.getBoundingClientRect();
+    return {
+      x: markerRect.left - mapBounds.left,
+      y: markerRect.top - mapBounds.top,
+    };
+  }
+
+  function addVisibleCrosshair(stage, mapBounds) {
+    const marker = document.querySelector("#pinLayer .th-marker.selected") || document.querySelector("#pinLayer .th-marker");
+    const anchor = markerAnchorInMap(marker, mapBounds);
+    if (!marker || !anchor) return;
+
+    const markerClone = document.createElement("span");
+    markerClone.className = "th-marker selected";
+    markerClone.style.position = "absolute";
+    markerClone.style.left = `${anchor.x}px`;
+    markerClone.style.top = `${anchor.y}px`;
+    markerClone.style.width = "0";
+    markerClone.style.height = "0";
+    markerClone.style.overflow = "visible";
+    markerClone.style.zIndex = "20";
+    markerClone.style.setProperty("--marker-zoom", marker.style.getPropertyValue("--marker-zoom") || "1");
+
+    const crosshair = marker.querySelector(".th-crosshair");
+    const label = marker.querySelector(".th-label");
+    if (crosshair) markerClone.appendChild(crosshair.cloneNode(true));
+    if (label) markerClone.appendChild(label.cloneNode(true));
+
+    stage.appendChild(markerClone);
+  }
+
   async function captureVisibleMap() {
     const mapCanvas = byId("mapCanvas");
     if (!mapCanvas || !mapCanvas.classList.contains("has-image") || !window.html2canvas) return "";
@@ -55,7 +100,7 @@
     stage.style.overflow = "hidden";
     stage.style.background = getComputedStyle(mapCanvas).backgroundColor || "#ffffff";
 
-    ["mapImage", "mapLabelImage", "pinLayer"].forEach((id) => {
+    ["mapImage", "mapLabelImage"].forEach((id) => {
       const source = byId(id);
       if (!source) return;
       if (source.tagName === "IMG" && !source.getAttribute("src")) return;
@@ -80,6 +125,8 @@
       }
       stage.appendChild(clone);
     });
+
+    addVisibleCrosshair(stage, bounds);
 
     document.body.appendChild(stage);
 
@@ -111,7 +158,7 @@
     [byId("reportPreview"), byId("printReport")].forEach((root) => {
       if (!root) return;
       root.querySelectorAll(".report-map").forEach((map) => {
-        map.innerHTML = `<img src="${snapshotUrl}" alt="Visible aerial map" style="display:block;width:100%;height:100%;object-fit:cover;">`;
+        map.innerHTML = `<img src="${snapshotUrl}" alt="Visible aerial map" style="display:block;width:100%;height:100%;object-fit:contain;background:#fff;">`;
       });
     });
   }
