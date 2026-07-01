@@ -202,6 +202,19 @@
     }
   }
 
+  function installAddHoleFallback() {
+    const addButton = getButton("addHoleBtn");
+    if (!addButton || addButton.dataset.addFallbackBound) return;
+    addButton.dataset.addFallbackBound = "true";
+    addButton.disabled = false;
+    addButton.addEventListener("click", (event) => {
+      if (typeof window.addHole !== "function") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      window.addHole();
+    }, true);
+  }
+
   window.sharePdf = sharePdf;
 
   window.addEventListener("load", () => {
@@ -211,5 +224,7 @@
     if (topButton) topButton.addEventListener("click", sharePdf);
     if (actionButton) actionButton.addEventListener("click", sharePdf);
     if (pdfButton) pdfButton.addEventListener("click", savePdfWithLockedMarker, true);
+    installAddHoleFallback();
+    setTimeout(installAddHoleFallback, 1000);
   });
 }());
