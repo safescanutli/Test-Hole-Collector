@@ -46,23 +46,64 @@
     const bounds = mapCanvas.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return "";
 
-    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const canvas = await window.html2canvas(mapCanvas, {
-      backgroundColor: "#ffffff",
-      scale: isIos ? 1.4 : 1.8,
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
-      removeContainer: true,
-      width: Math.ceil(bounds.width),
-      height: Math.ceil(bounds.height),
-      windowWidth: Math.ceil(bounds.width),
-      windowHeight: Math.ceil(bounds.height),
-      scrollX: 0,
-      scrollY: 0,
+    const stage = document.createElement("div");
+    stage.style.position = "fixed";
+    stage.style.left = "-10000px";
+    stage.style.top = "0";
+    stage.style.width = `${Math.ceil(bounds.width)}px`;
+    stage.style.height = `${Math.ceil(bounds.height)}px`;
+    stage.style.overflow = "hidden";
+    stage.style.background = getComputedStyle(mapCanvas).backgroundColor || "#ffffff";
+
+    ["mapImage", "mapLabelImage", "pinLayer"].forEach((id) => {
+      const source = byId(id);
+      if (!source) return;
+      if (source.tagName === "IMG" && !source.getAttribute("src")) return;
+      if (source.tagName === "IMG" && getComputedStyle(source).display === "none") return;
+
+      const sourceRect = source.getBoundingClientRect();
+      const clone = source.cloneNode(true);
+      clone.removeAttribute("id");
+      clone.style.position = "absolute";
+      clone.style.left = `${sourceRect.left - bounds.left}px`;
+      clone.style.top = `${sourceRect.top - bounds.top}px`;
+      clone.style.width = `${sourceRect.width}px`;
+      clone.style.height = `${sourceRect.height}px`;
+      clone.style.right = "auto";
+      clone.style.bottom = "auto";
+      clone.style.display = "block";
+      clone.style.transform = "none";
+      clone.style.transformOrigin = "0 0";
+      clone.style.pointerEvents = "none";
+      if (clone.tagName === "IMG") {
+        clone.style.objectFit = "contain";
+      }
+      stage.appendChild(clone);
     });
 
-    return canvas.toDataURL("image/jpeg", isIos ? 0.78 : 0.82);
+    document.body.appendChild(stage);
+
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    try {
+      const canvas = await window.html2canvas(stage, {
+        backgroundColor: "#ffffff",
+        scale: isIos ? 1.4 : 1.8,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        removeContainer: true,
+        width: Math.ceil(bounds.width),
+        height: Math.ceil(bounds.height),
+        windowWidth: Math.ceil(bounds.width),
+        windowHeight: Math.ceil(bounds.height),
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      return canvas.toDataURL("image/jpeg", isIos ? 0.78 : 0.82);
+    } finally {
+      stage.remove();
+    }
   }
 
   function applyMapSnapshot(snapshotUrl) {
