@@ -1,0 +1,25 @@
+/* Keep generated PDFs aligned with the on-screen report preview. */
+.pdf-render-stage > .sheet {
+  padding: 0.18in !important;
+}
+
+.pdf-render-stage .sheet-frame {
+  height: 10.64in !important;
+  max-height: 10.64in !important;
+}
+
+.pdf-render-stage .first-page-frame {
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto !important;
+}
+
+.pdf-render-stage .photo-page-frame {
+  grid-template-rows: auto auto minmax(0, 1fr) !important;
+}
+
+.pdf-render-stage .drawing-area,
+.pdf-render-stage .first-page-map,
+.pdf-render-stage .report-map {
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
