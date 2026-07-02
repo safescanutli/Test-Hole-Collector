@@ -68,6 +68,179 @@
     return null;
   }
 
+  function numericValue(value) {
+    if (value === null || value === undefined || value === "") return null;
+    const number = Number(String(value).replace(/,/g, ""));
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function markerZoomLocal(mapZoom) {
+    return Math.max(0.75, Math.min(2.25, 0.75 + ((mapZoom || 1) - 1) * 0.5625));
+  }
+
+  function pipeColorValueLocal(pipe) {
+    const raw = String((pipe && pipe.pipeColor) || "").trim();
+    const lower = raw.toLowerCase();
+    const colorMap = {
+      blue: "#0066cc",
+      water: "#0066cc",
+      red: "#ff0000",
+      electric: "#ff0000",
+      green: "#00a651",
+      sewer: "#00a651",
+      storm: "#00a651",
+      yellow: "#f6c400",
+      gas: "#f6c400",
+      orange: "#ff8800",
+      telecom: "#ff8800",
+      purple: "#8a2be2",
+      reclaimed: "#8a2be2",
+      black: "#000000",
+      white: "#ffffff",
+      gray: "#808080",
+      grey: "#808080",
+      brown: "#9c4f2f",
+    };
+
+    if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw;
+    return colorMap[lower] || "#9c4f2f";
+  }
+
+  function normalizeBearing(value) {
+    const number = numericValue(value);
+    if (number === null) return null;
+    return ((number % 360) + 360) % 360;
+  }
+
+  function pipeDisplayDistance(value, fallback) {
+    const distance = numericValue(value);
+    return distance === null || distance <= 0 ? fallback : distance;
+  }
+
+  function loadCanvasImage(source) {
+    const src = source && (source.currentSrc || source.src || source.getAttribute("src"));
+    if (!src) return Promise.resolve(null);
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      if (!src.startsWith("data:")) image.crossOrigin = "anonymous";
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Map image could not be drawn for the PDF."));
+      image.src = src;
+    });
+  }
+
+  function drawPipe(ctx, pipe, anchor, markerZoom) {
+    const bearing = normalizeBearing(pipe && pipe.pipeBearing);
+    if (bearing === null) return;
+
+    const start = pipeDisplayDistance(pipe.pipeStartDistance, 95);
+    const end = pipeDisplayDistance(pipe.pipeEndDistance, 95);
+    const radians = bearing * Math.PI / 180;
+    const dx = Math.sin(radians);
+    const dy = -Math.cos(radians);
+
+    ctx.save();
+    ctx.strokeStyle = pipeColorValueLocal(pipe);
+    ctx.lineWidth = Math.max(3, 4 * markerZoom);
+    ctx.lineCap = "butt";
+    ctx.beginPath();
+    ctx.moveTo(anchor.x - dx * start, anchor.y - dy * start);
+    ctx.lineTo(anchor.x + dx * end, anchor.y + dy * end);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawCrosshair(ctx, anchor, markerZoom) {
+    const radius = 10.56 * markerZoom;
+    const arm = 17.28 * markerZoom;
+
+    ctx.save();
+    ctx.strokeStyle = "#1f4f47";
+    ctx.lineWidth = Math.max(2, 2.4 * markerZoom);
+    ctx.beginPath();
+    ctx.arc(anchor.x, anchor.y, radius, 0, Math.PI * 2);
+    ctx.moveTo(anchor.x - arm, anchor.y);
+    ctx.lineTo(anchor.x + arm, anchor.y);
+    ctx.moveTo(anchor.x, anchor.y - arm);
+    ctx.lineTo(anchor.x, anchor.y + arm);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function wrapWords(ctx, text, maxWidth) {
+    const words = String(text || "").split(/\s+/).filter(Boolean);
+    const lines = [];
+    let current = "";
+
+    words.forEach((word) => {
+      const next = current ? `${current} ${word}` : word;
+      if (current && ctx.measureText(next).width > maxWidth) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = next;
+      }
+    });
+
+    if (current) lines.push(current);
+    return lines.length ? lines : [""];
+  }
+
+  function roundedRect(ctx, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    ctx.lineTo(x + r, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+  }
+
+  function drawLabel(ctx, hole, anchor, markerZoom, canvasWidth) {
+    const title = String((hole && hole.holeName) || "TH");
+    const utility = String((hole && (hole.utilityType || hole.holeName)) || "TH");
+    const labelX = anchor.x + 34 * markerZoom;
+    const labelY = anchor.y - 26 * markerZoom;
+    const paddingX = 6 * markerZoom;
+    const paddingY = 4 * markerZoom;
+    const maxTextWidth = Math.max(84 * markerZoom, Math.min(150 * markerZoom, canvasWidth - labelX - paddingX * 2 - 4));
+    const titleFont = `800 ${10.2 * markerZoom}px Arial, Helvetica, sans-serif`;
+    const utilityFont = `800 ${12 * markerZoom}px Arial, Helvetica, sans-serif`;
+
+    ctx.save();
+    ctx.font = utilityFont;
+    const utilityLines = wrapWords(ctx, utility, maxTextWidth);
+    ctx.font = titleFont;
+    const titleWidth = ctx.measureText(title).width;
+    ctx.font = utilityFont;
+    const utilityWidth = Math.max(...utilityLines.map((line) => ctx.measureText(line).width));
+    const labelWidth = Math.max(34 * markerZoom, titleWidth, utilityWidth) + paddingX * 2;
+    const titleHeight = 12 * markerZoom;
+    const lineHeight = 15 * markerZoom;
+    const labelHeight = paddingY * 2 + titleHeight + utilityLines.length * lineHeight;
+
+    ctx.fillStyle = "#1f4f47";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = Math.max(1.5, 2 * markerZoom);
+    roundedRect(ctx, labelX, labelY, labelWidth, labelHeight, 4 * markerZoom);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.textBaseline = "top";
+    ctx.font = titleFont;
+    ctx.fillText(title, labelX + paddingX, labelY + paddingY);
+    ctx.font = utilityFont;
+    utilityLines.forEach((line, index) => {
+      ctx.fillText(line, labelX + paddingX, labelY + paddingY + titleHeight + index * lineHeight);
+    });
+    ctx.restore();
+  }
+
   function addVisibleCrosshair(stage, mapBounds, anchor) {
     const marker = document.querySelector("#pinLayer .th-marker.selected") || document.querySelector("#pinLayer .th-marker");
     const markerAnchor = anchor || markerAnchorInMap(marker, mapBounds);
@@ -91,7 +264,7 @@
 
   async function captureVisibleMap() {
     const mapCanvas = byId("mapCanvas");
-    if (!mapCanvas || !mapCanvas.classList.contains("has-image") || !window.html2canvas) return "";
+    if (!mapCanvas || !mapCanvas.classList.contains("has-image")) return "";
 
     const bounds = mapCanvas.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return "";
@@ -107,65 +280,88 @@
         y: ((hole.mapY / 100) * contentHeight) - scrollTop,
       }
       : null;
-
-    const stage = document.createElement("div");
-    stage.style.position = "fixed";
-    stage.style.left = "-10000px";
-    stage.style.top = "0";
-    stage.style.width = `${Math.ceil(bounds.width)}px`;
-    stage.style.height = `${Math.ceil(bounds.height)}px`;
-    stage.style.overflow = "hidden";
-    stage.style.background = getComputedStyle(mapCanvas).backgroundColor || "#ffffff";
-
-    ["mapImage", "mapLabelImage"].forEach((id) => {
-      const source = byId(id);
-      if (!source) return;
-      if (source.tagName === "IMG" && !source.getAttribute("src")) return;
-      if (source.tagName === "IMG" && getComputedStyle(source).display === "none") return;
-
-      const clone = source.cloneNode(true);
-      clone.removeAttribute("id");
-      clone.style.position = "absolute";
-      clone.style.left = `${-scrollLeft}px`;
-      clone.style.top = `${-scrollTop}px`;
-      clone.style.width = `${contentWidth}px`;
-      clone.style.height = `${contentHeight}px`;
-      clone.style.right = "auto";
-      clone.style.bottom = "auto";
-      clone.style.display = "block";
-      clone.style.transform = "none";
-      clone.style.transformOrigin = "0 0";
-      clone.style.pointerEvents = "none";
-      if (clone.tagName === "IMG") {
-        clone.style.objectFit = "fill";
-      }
-      stage.appendChild(clone);
-    });
-
-    addVisibleCrosshair(stage, bounds, markerAnchor);
-
-    document.body.appendChild(stage);
-
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const scale = isIos ? 1.4 : 1.8;
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.ceil(bounds.width * scale);
+    canvas.height = Math.ceil(bounds.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.scale(scale, scale);
+    ctx.fillStyle = getComputedStyle(mapCanvas).backgroundColor || "#ffffff";
+    ctx.fillRect(0, 0, bounds.width, bounds.height);
+
     try {
-      const canvas = await window.html2canvas(stage, {
-        backgroundColor: "#ffffff",
-        scale: isIos ? 1.4 : 1.8,
-        useCORS: true,
-        allowTaint: true,
-        logging: false,
-        removeContainer: true,
-        width: Math.ceil(bounds.width),
-        height: Math.ceil(bounds.height),
-        windowWidth: Math.ceil(bounds.width),
-        windowHeight: Math.ceil(bounds.height),
-        scrollX: 0,
-        scrollY: 0,
-      });
+      for (const id of ["mapImage", "mapLabelImage"]) {
+        const source = byId(id);
+        if (!source || !source.getAttribute("src") || getComputedStyle(source).display === "none") continue;
+        const image = await loadCanvasImage(source);
+        if (image) ctx.drawImage(image, -scrollLeft, -scrollTop, contentWidth, contentHeight);
+      }
+
+      if (markerAnchor) {
+        const markerZoom = markerZoomLocal(zoom);
+        (hole.pipes || []).forEach((pipe) => drawPipe(ctx, pipe, markerAnchor, markerZoom));
+        drawCrosshair(ctx, markerAnchor, markerZoom);
+        drawLabel(ctx, hole, markerAnchor, markerZoom, bounds.width);
+      }
 
       return canvas.toDataURL("image/jpeg", isIos ? 0.78 : 0.82);
-    } finally {
-      stage.remove();
+    } catch (error) {
+      const stage = document.createElement("div");
+      stage.style.position = "fixed";
+      stage.style.left = "-10000px";
+      stage.style.top = "0";
+      stage.style.width = `${Math.ceil(bounds.width)}px`;
+      stage.style.height = `${Math.ceil(bounds.height)}px`;
+      stage.style.overflow = "hidden";
+      stage.style.background = getComputedStyle(mapCanvas).backgroundColor || "#ffffff";
+
+      ["mapImage", "mapLabelImage"].forEach((id) => {
+        const source = byId(id);
+        if (!source) return;
+        if (source.tagName === "IMG" && !source.getAttribute("src")) return;
+        if (source.tagName === "IMG" && getComputedStyle(source).display === "none") return;
+
+        const clone = source.cloneNode(true);
+        clone.removeAttribute("id");
+        clone.style.position = "absolute";
+        clone.style.left = `${-scrollLeft}px`;
+        clone.style.top = `${-scrollTop}px`;
+        clone.style.width = `${contentWidth}px`;
+        clone.style.height = `${contentHeight}px`;
+        clone.style.right = "auto";
+        clone.style.bottom = "auto";
+        clone.style.display = "block";
+        clone.style.transform = "none";
+        clone.style.transformOrigin = "0 0";
+        clone.style.pointerEvents = "none";
+        if (clone.tagName === "IMG") clone.style.objectFit = "fill";
+        stage.appendChild(clone);
+      });
+
+      addVisibleCrosshair(stage, bounds, markerAnchor);
+      document.body.appendChild(stage);
+
+      try {
+        const fallbackCanvas = await window.html2canvas(stage, {
+          backgroundColor: "#ffffff",
+          scale,
+          useCORS: true,
+          allowTaint: true,
+          logging: false,
+          removeContainer: true,
+          width: Math.ceil(bounds.width),
+          height: Math.ceil(bounds.height),
+          windowWidth: Math.ceil(bounds.width),
+          windowHeight: Math.ceil(bounds.height),
+          scrollX: 0,
+          scrollY: 0,
+        });
+        return fallbackCanvas.toDataURL("image/jpeg", isIos ? 0.78 : 0.82);
+      } finally {
+        stage.remove();
+      }
     }
   }
 
