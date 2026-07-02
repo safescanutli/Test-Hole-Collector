@@ -20,7 +20,7 @@
   }
 
   function setPdfButtonsLocal(disabled, text) {
-    ["pdfBtn", "sharePdfBtn", "sharePdfActionBtn"].forEach((id) => {
+    ["pdfBtn", "sharePdfBtn", "sharePdfActionBtn", "printBtn"].forEach((id) => {
       const button = byId(id);
       if (!button) return;
       if (!button.dataset.originalText) button.dataset.originalText = button.textContent;
@@ -60,26 +60,31 @@
     };
   }
 
-  function addVisibleCrosshair(stage, mapBounds) {
+  function selectedMapHole() {
+    if (typeof selectedHole === "function") return selectedHole();
+    if (typeof state !== "undefined" && state && Array.isArray(state.holes)) {
+      return state.holes.find((hole) => hole.id === state.selectedId) || state.holes[0] || null;
+    }
+    return null;
+  }
+
+  function addVisibleCrosshair(stage, mapBounds, anchor) {
     const marker = document.querySelector("#pinLayer .th-marker.selected") || document.querySelector("#pinLayer .th-marker");
-    const anchor = markerAnchorInMap(marker, mapBounds);
-    if (!marker || !anchor) return;
+    const markerAnchor = anchor || markerAnchorInMap(marker, mapBounds);
+    if (!marker || !markerAnchor) return;
 
     const markerClone = document.createElement("span");
     markerClone.className = "th-marker selected";
     markerClone.style.position = "absolute";
-    markerClone.style.left = `${anchor.x}px`;
-    markerClone.style.top = `${anchor.y}px`;
+    markerClone.style.left = `${markerAnchor.x}px`;
+    markerClone.style.top = `${markerAnchor.y}px`;
     markerClone.style.width = "0";
     markerClone.style.height = "0";
     markerClone.style.overflow = "visible";
     markerClone.style.zIndex = "20";
     markerClone.style.setProperty("--marker-zoom", marker.style.getPropertyValue("--marker-zoom") || "1");
 
-    const crosshair = marker.querySelector(".th-crosshair");
-    const label = marker.querySelector(".th-label");
-    if (crosshair) markerClone.appendChild(crosshair.cloneNode(true));
-    if (label) markerClone.appendChild(label.cloneNode(true));
+    marker.childNodes.forEach((child) => markerClone.appendChild(child.cloneNode(true)));
 
     stage.appendChild(markerClone);
   }
@@ -90,6 +95,18 @@
 
     const bounds = mapCanvas.getBoundingClientRect();
     if (!bounds.width || !bounds.height) return "";
+    const hole = selectedMapHole();
+    const zoom = (hole && hole.mapZoom) || (typeof state !== "undefined" && state.mapZoom) || 1;
+    const contentWidth = Math.ceil(mapCanvas.clientWidth * zoom);
+    const contentHeight = Math.ceil(mapCanvas.clientHeight * zoom);
+    const scrollLeft = mapCanvas.scrollLeft || 0;
+    const scrollTop = mapCanvas.scrollTop || 0;
+    const markerAnchor = hole && Number.isFinite(hole.mapX) && Number.isFinite(hole.mapY)
+      ? {
+        x: ((hole.mapX / 100) * contentWidth) - scrollLeft,
+        y: ((hole.mapY / 100) * contentHeight) - scrollTop,
+      }
+      : null;
 
     const stage = document.createElement("div");
     stage.style.position = "fixed";
@@ -106,14 +123,13 @@
       if (source.tagName === "IMG" && !source.getAttribute("src")) return;
       if (source.tagName === "IMG" && getComputedStyle(source).display === "none") return;
 
-      const sourceRect = source.getBoundingClientRect();
       const clone = source.cloneNode(true);
       clone.removeAttribute("id");
       clone.style.position = "absolute";
-      clone.style.left = `${sourceRect.left - bounds.left}px`;
-      clone.style.top = `${sourceRect.top - bounds.top}px`;
-      clone.style.width = `${sourceRect.width}px`;
-      clone.style.height = `${sourceRect.height}px`;
+      clone.style.left = `${-scrollLeft}px`;
+      clone.style.top = `${-scrollTop}px`;
+      clone.style.width = `${contentWidth}px`;
+      clone.style.height = `${contentHeight}px`;
       clone.style.right = "auto";
       clone.style.bottom = "auto";
       clone.style.display = "block";
@@ -121,12 +137,12 @@
       clone.style.transformOrigin = "0 0";
       clone.style.pointerEvents = "none";
       if (clone.tagName === "IMG") {
-        clone.style.objectFit = "contain";
+        clone.style.objectFit = "fill";
       }
       stage.appendChild(clone);
     });
 
-    addVisibleCrosshair(stage, bounds);
+    addVisibleCrosshair(stage, bounds, markerAnchor);
 
     document.body.appendChild(stage);
 
@@ -312,16 +328,35 @@
     }
   }
 
+  async function printWithMapSnapshot() {
+    setPdfButtonsLocal(true, "Preparing Print...");
+
+    try {
+      await renderReportWithVisibleMap();
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      window.print();
+    } catch (error) {
+      alert(`Print preparation failed: ${error.message}`);
+    } finally {
+      setPdfButtonsLocal(false);
+    }
+  }
+
   function installPdfMapSnapshot() {
     if (document.documentElement.dataset.pdfMapSnapshotBound) return;
     document.documentElement.dataset.pdfMapSnapshotBound = "true";
 
     document.addEventListener("click", (event) => {
-      const button = event.target.closest("#sharePdfBtn, #sharePdfActionBtn, #pdfBtn");
+      const button = event.target.closest("#sharePdfBtn, #sharePdfActionBtn, #pdfBtn, #printBtn");
       if (!button) return;
 
       event.preventDefault();
       event.stopImmediatePropagation();
+
+      if (button.id === "printBtn") {
+        printWithMapSnapshot();
+        return;
+      }
 
       if (button.id === "pdfBtn") {
         const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
