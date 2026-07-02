@@ -1371,15 +1371,15 @@ textarea {
 .th-label,
 .report-th-label {
   position: absolute !important;
-  left: calc(34px * var(--marker-zoom, var(--map-zoom, 1))) !important;
-  top: calc(-26px * var(--marker-zoom, var(--map-zoom, 1))) !important;
+  left: calc(27px * var(--marker-zoom, var(--map-zoom, 1))) !important;
+  top: calc(-21px * var(--marker-zoom, var(--map-zoom, 1))) !important;
   z-index: 4 !important;
   pointer-events: none !important;
 }
 
 .report-th-label {
-  left: calc(34px * var(--marker-zoom, 1)) !important;
-  top: calc(-26px * var(--marker-zoom, 1)) !important;
+  left: calc(27px * var(--marker-zoom, 1)) !important;
+  top: calc(-21px * var(--marker-zoom, 1)) !important;
 }
 
 /* Reuse old label card style inside new label */
@@ -1387,15 +1387,15 @@ textarea {
 .report-th-label b {
   display: inline-grid;
   gap: 1px;
-  min-width: calc(34px * var(--marker-zoom, var(--map-zoom, 1)));
-  padding: calc(3px * var(--marker-zoom, var(--map-zoom, 1))) calc(6px * var(--marker-zoom, var(--map-zoom, 1)));
+  min-width: calc(28px * var(--marker-zoom, var(--map-zoom, 1)));
+  padding: calc(2px * var(--marker-zoom, var(--map-zoom, 1))) calc(5px * var(--marker-zoom, var(--map-zoom, 1)));
   border: 2px solid #fff;
   border-radius: 4px;
   background: var(--accent);
   color: #fff;
   text-shadow: none;
   box-shadow: 0 0 0 1px #111;
-  font-size: calc(12px * var(--marker-zoom, var(--map-zoom, 1)));
+  font-size: calc(10px * var(--marker-zoom, var(--map-zoom, 1)));
   font-weight: 800;
 }
 
@@ -1404,7 +1404,7 @@ textarea {
   background: #fff;
   color: #111;
   box-shadow: none;
-  font-size: calc(10px * var(--marker-zoom, 1));
+  font-size: calc(8.5px * var(--marker-zoom, 1));
   padding: 2px 4px;
 }
 
