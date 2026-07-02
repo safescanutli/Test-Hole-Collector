@@ -29,44 +29,15 @@
     hole.depthTop = hole.pipes[0].depthTop || "";
   }
 
-  function syncPipeCard(card, hole, options = {}) {
+  function syncPipeCard(card, hole) {
     if (!card || !hole || !Array.isArray(hole.pipes)) return null;
     const pipe = hole.pipes.find((item) => item.id === card.dataset.pipeId);
     if (!pipe) return null;
 
     card.querySelectorAll("[data-pipe-field]").forEach((input) => {
-      if (options.skipPrimaryElevations && pipe === hole.pipes[0]
-        && (input.dataset.pipeField === "groundElevation" || input.dataset.pipeField === "topPipeElevation")) {
-        return;
-      }
       pipe[input.dataset.pipeField] = input.value;
     });
     return pipe;
-  }
-
-  function syncPrimaryElevationInputs(hole) {
-    if (!hole || !Array.isArray(hole.pipes) || !hole.pipes.length) return;
-    const primaryPipe = hole.pipes[0];
-    const active = document.activeElement;
-    const topGroundInput = byId("elevation");
-    const topPipeInput = byId("topPipeElevation");
-    const primaryCard = pipeCards()[0];
-    const cardGroundInput = primaryCard && primaryCard.querySelector('[data-pipe-field="groundElevation"]');
-    const cardTopPipeInput = primaryCard && primaryCard.querySelector('[data-pipe-field="topPipeElevation"]');
-
-    if (active === cardGroundInput) {
-      primaryPipe.groundElevation = cardGroundInput.value;
-      if (topGroundInput) topGroundInput.value = primaryPipe.groundElevation;
-    } else if (topGroundInput) {
-      primaryPipe.groundElevation = topGroundInput.value;
-    }
-
-    if (active === cardTopPipeInput) {
-      primaryPipe.topPipeElevation = cardTopPipeInput.value;
-      if (topPipeInput) topPipeInput.value = primaryPipe.topPipeElevation;
-    } else if (topPipeInput) {
-      primaryPipe.topPipeElevation = topPipeInput.value;
-    }
   }
 
   function syncPipeInputs() {
@@ -74,16 +45,8 @@
     const hole = selectedHole();
     if (!hole) return null;
 
-    pipeCards().forEach((card) => syncPipeCard(card, hole, { skipPrimaryElevations: true }));
-    syncPrimaryElevationInputs(hole);
+    pipeCards().forEach((card) => syncPipeCard(card, hole));
     syncPipeDepths(hole);
-
-    const elevation = byId("elevation");
-    const topPipeElevation = byId("topPipeElevation");
-    const depthTop = byId("depthTop");
-    if (elevation && document.activeElement !== elevation) elevation.value = hole.elevation || "";
-    if (topPipeElevation && document.activeElement !== topPipeElevation) topPipeElevation.value = hole.topPipeElevation || "";
-    if (depthTop) depthTop.value = hole.depthTop || "";
 
     pipeCards().forEach((card) => {
       const pipe = hole.pipes.find((item) => item.id === card.dataset.pipeId);
@@ -235,14 +198,6 @@
       pipeList.addEventListener("change", syncPipeInputs, true);
     }
 
-    ["elevation", "topPipeElevation"].forEach((id) => {
-      const input = byId(id);
-      if (!input || input.dataset.depthSyncBound) return;
-      input.dataset.depthSyncBound = "true";
-      input.addEventListener("input", syncPipeInputs, true);
-      input.addEventListener("change", syncPipeInputs, true);
-      input.addEventListener("blur", syncPipeInputs, true);
-    });
   }
 
   if (document.readyState === "loading") {

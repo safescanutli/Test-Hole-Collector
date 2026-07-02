@@ -446,11 +446,30 @@ textarea {
 }
 
 .photo-grid figure {
+  position: relative;
   margin: 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: #fff;
+}
+
+.photo-grid figure.photo-load-error {
+  border-color: #9b1c1c;
+}
+
+.photo-grid figure.photo-load-error::before {
+  content: "Could not display photo";
+  position: absolute;
+  inset: 0 0 28px;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  background: #fff6f6;
+  color: #9b1c1c;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .photo-grid img {
@@ -464,6 +483,18 @@ textarea {
   padding: 6px;
   color: var(--muted);
   font-size: 11px;
+}
+
+.photo-status {
+  min-height: 18px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.photo-status.error {
+  color: #9b1c1c;
+  font-weight: 700;
 }
 
 .report-preview {

@@ -209,18 +209,6 @@
                 <option>Visual</option>
               </select>
             </label>
-            <label>
-              Pipe 1 ground elevation
-              <input id="elevation" inputmode="decimal" placeholder="Ground elev.">
-            </label>
-            <label>
-              Pipe 1 top of pipe elevation
-              <input id="topPipeElevation" inputmode="decimal" placeholder="Top pipe elev.">
-            </label>
-            <label>
-              Pipe 1 depth to top
-              <input id="depthTop" inputmode="decimal" placeholder="Auto" readonly>
-            </label>
             <div class="wide pipe-editor">
               <div class="pipe-editor-head">
                 <h3>Pipes</h3>
@@ -246,6 +234,7 @@
             <button id="clearPhotosBtn" type="button">Clear Photos</button>
           </div>
           <div id="photoGrid" class="photo-grid"></div>
+          <div id="photoStatus" class="photo-status" aria-live="polite"></div>
         </form>
       </section>
 
@@ -276,7 +265,6 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
     <script src="app.js"></script>
-    <script src="share-pdf.js"></script>
     <script src="aerial-fix.js"></script>
     <script src="pdf-map-snapshot.js"></script>
   </body>

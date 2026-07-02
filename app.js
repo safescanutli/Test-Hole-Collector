@@ -26,9 +26,6 @@ const holeFields = [
   "utilityType",
   "surfaceType",
   "method",
-  "elevation",
-  "topPipeElevation",
-  "depthTop",
   "description",
   "holeNotes",
 ];
@@ -44,6 +41,7 @@ const state = {
 let projectRecords = [];
 let activeProjectId = null;
 let projectDbPromise;
+let preparedPdfFile = null;
 
 function openProjectDb() {
   if (!projectDbPromise) {
@@ -388,24 +386,18 @@ function bindProjectFields() {
 function bindHoleFields() {
   holeFields.forEach((field) => {
     const input = $(field);
-    input.addEventListener("input", () => {
+    if (!input) return;
+    const updateHoleField = () => {
       const hole = selectedHole();
       if (!hole) return;
       hole[field] = input.value;
-      if (field === "elevation" || field === "topPipeElevation") {
-        if (!Array.isArray(hole.pipes) || !hole.pipes.length) hole.pipes = [blankPipe(hole)];
-        const primaryPipe = hole.pipes[0];
-        if (field === "elevation") primaryPipe.groundElevation = input.value;
-        if (field === "topPipeElevation") primaryPipe.topPipeElevation = input.value;
-        updatePipeDepths(hole);
-        $("depthTop").value = hole.depthTop;
-        refreshPipeDepthInputs(hole);
-      }
       save();
       renderHoleList();
       renderPins();
       renderReport();
-    });
+    };
+    input.addEventListener("input", updateHoleField);
+    input.addEventListener("change", updateHoleField);
   });
 }
 
@@ -630,7 +622,8 @@ function renderHoleForm() {
   if (!hole) return;
 
   holeFields.forEach((field) => {
-    $(field).value = hole[field] || "";
+    const input = $(field);
+    if (input) input.value = hole[field] || "";
   });
   renderPipeEditor(hole);
   renderPhotos(hole);
@@ -696,9 +689,6 @@ function updatePipe(event) {
   pipe[input.dataset.pipeField] = input.value;
   if (input.dataset.pipeField === "groundElevation" || input.dataset.pipeField === "topPipeElevation") {
     updatePipeDepths(hole);
-    $("elevation").value = hole.elevation;
-    $("topPipeElevation").value = hole.topPipeElevation;
-    $("depthTop").value = hole.depthTop;
     refreshPipeDepthInputs(hole);
   }
   syncPrimaryPipeLegacy(hole);
@@ -708,7 +698,8 @@ function updatePipe(event) {
 }
 
 function renderPhotos(hole) {
-  $("photoGrid").innerHTML = (hole.photos || [])
+  const grid = $("photoGrid");
+  grid.innerHTML = (hole.photos || [])
     .map(
       (photo, index) => `
         <figure>
@@ -718,6 +709,20 @@ function renderPhotos(hole) {
       `,
     )
     .join("");
+  grid.querySelectorAll("img").forEach((image) => {
+    image.addEventListener("error", () => {
+      const figure = image.closest("figure");
+      if (figure) figure.classList.add("photo-load-error");
+      setPhotoStatus("Photo was saved, but this browser could not display that image format. Try JPG or PNG.", true);
+    }, { once: true });
+  });
+}
+
+function setPhotoStatus(message, isError = false) {
+  const status = $("photoStatus");
+  if (!status) return;
+  status.textContent = message || "";
+  status.classList.toggle("error", Boolean(isError));
 }
 
 function renderPins() {
@@ -878,8 +883,9 @@ function esriExportUrl(service, bbox, transparent) {
     bbox,
     bboxSR: "4326",
     imageSR: "4326",
-    size: "1400,1000",
-    format: "png32",
+    size: transparent ? "1100,800" : "1100,800",
+    dpi: "96",
+    format: transparent ? "png32" : "jpg",
     transparent: transparent ? "true" : "false",
     f: "image",
   });
@@ -890,9 +896,47 @@ function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
+    reader.onerror = () => reject(reader.error || new Error("File could not be read."));
     reader.readAsDataURL(file);
   });
+}
+
+function imageFromDataUrl(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Photo format is not supported by this browser."));
+    image.src = dataUrl;
+  });
+}
+
+async function photoToStorageDataUrl(file) {
+  if (!file || !file.type || !file.type.startsWith("image/")) {
+    throw new Error("Only image files can be added as photos.");
+  }
+
+  const dataUrl = await fileToDataUrl(file);
+  if (/^data:image\/svg\+xml/i.test(dataUrl) || /^data:image\/gif/i.test(dataUrl)) {
+    return dataUrl;
+  }
+
+  try {
+    const image = await imageFromDataUrl(dataUrl);
+    const maxSide = 1800;
+    const scale = Math.min(1, maxSide / Math.max(image.naturalWidth || image.width, image.naturalHeight || image.height));
+    const width = Math.max(1, Math.round((image.naturalWidth || image.width) * scale));
+    const height = Math.max(1, Math.round((image.naturalHeight || image.height) * scale));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) return dataUrl;
+    context.drawImage(image, 0, 0, width, height);
+    return canvas.toDataURL("image/jpeg", 0.78);
+  } catch (error) {
+    return dataUrl;
+  }
 }
 
 async function loadMapImage(event) {
@@ -910,19 +954,45 @@ async function loadMapImage(event) {
 
 async function addPhotos(event) {
   const hole = selectedHole();
-  if (!hole) return;
+  if (!hole) {
+    setPhotoStatus("Add a test hole before adding photos.", true);
+    event.target.value = "";
+    return;
+  }
   const files = Array.from(event.target.files || []);
-  const photos = await Promise.all(
-    files.map(async (file) => ({
-      name: file.name,
-      src: await fileToDataUrl(file),
-    })),
-  );
-  hole.photos = [...(hole.photos || []), ...photos];
-  save();
-  renderPhotos(hole);
-  renderReport();
-  event.target.value = "";
+  if (!files.length) return;
+
+  setPhotoStatus(`Loading ${files.length} photo${files.length === 1 ? "" : "s"}...`);
+  const photos = [];
+  const failed = [];
+
+  try {
+    for (const file of files) {
+      try {
+        photos.push({
+          name: file.name,
+          src: await photoToStorageDataUrl(file),
+        });
+      } catch (error) {
+        failed.push(file.name || "photo");
+      }
+    }
+
+    if (photos.length) {
+      hole.photos = [...(hole.photos || []), ...photos];
+      save();
+      renderPhotos(hole);
+      renderReport();
+    }
+
+    if (failed.length) {
+      setPhotoStatus(`${failed.length} photo${failed.length === 1 ? "" : "s"} could not be read. Try a smaller JPG or PNG.`, true);
+    } else {
+      setPhotoStatus(`Added ${photos.length} photo${photos.length === 1 ? "" : "s"}.`);
+    }
+  } finally {
+    event.target.value = "";
+  }
 }
 
 function clearPhotos() {
@@ -1015,10 +1085,8 @@ function holeDataRows(hole) {
     </tr>
     <tr>
       <th>Surface</th><td>${escapeHtml(hole.surfaceType)}</td>
-      <th>Pipe 1 Ground Elev.</th><td>${escapeHtml(hole.elevation)}</td>
-      <th>Pipe 1 Top Elev.</th><td>${escapeHtml(hole.topPipeElevation)}</td>
+      <th>Method</th><td colspan="3">${escapeHtml(hole.method)}</td>
     </tr>
-    <tr><th>Pipe 1 Depth / Method</th><td colspan="5">${escapeHtml([hole.depthTop, hole.method].filter(Boolean).join(" / "))}</td></tr>
     ${pipeRows}
     <tr>
       <th>Description</th><td colspan="5">${escapeHtml(hole.description)}</td>
@@ -1327,41 +1395,115 @@ function emailPdf() {
   window.location.href = `mailto:?subject=${subject}&body=${body}`;
 }
 
-async function savePdf() {
+function pdfFileName() {
+  return `${safeFilePart(state.project.projectFileName || state.project.projectNumber || state.project.projectName)}.pdf`;
+}
+
+function setPdfButtons(disabled, text) {
+  ["pdfBtn", "sharePdfBtn", "sharePdfActionBtn"].forEach((id) => {
+    const button = $(id);
+    if (!button) return;
+    if (!button.dataset.originalText) button.dataset.originalText = button.textContent;
+    button.disabled = disabled;
+    button.textContent = disabled && text ? text : button.dataset.originalText;
+  });
+}
+
+function updateShareReadyState(isReady) {
+  ["sharePdfBtn", "sharePdfActionBtn"].forEach((id) => {
+    const button = $(id);
+    if (!button) return;
+    if (!button.dataset.originalText) button.dataset.originalText = button.textContent;
+    button.textContent = isReady ? "Tap to Share PDF" : button.dataset.originalText;
+    button.classList.toggle("primary", isReady || id === "sharePdfBtn");
+  });
+}
+
+async function sharePreparedPdf() {
+  if (!preparedPdfFile) return false;
+
+  if (navigator.canShare && navigator.canShare({ files: [preparedPdfFile] }) && navigator.share) {
+    await navigator.share({
+      title: preparedPdfFile.name.replace(/\.pdf$/i, ""),
+      text: "Test hole report PDF",
+      files: [preparedPdfFile],
+    });
+    preparedPdfFile = null;
+    updateShareReadyState(false);
+    return true;
+  }
+
+  const url = URL.createObjectURL(preparedPdfFile);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = preparedPdfFile.name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+  preparedPdfFile = null;
+  updateShareReadyState(false);
+  alert("Sharing files is not supported in this browser, so the PDF was downloaded instead.");
+  return true;
+}
+
+function lockReportMarkerPositions(sourceSheet, targetSheet) {
+  if (!sourceSheet || !targetSheet) return;
+
+  const sourceMarkers = Array.from(sourceSheet.querySelectorAll(".report-th-marker"));
+  const targetMarkers = Array.from(targetSheet.querySelectorAll(".report-th-marker"));
+
+  sourceMarkers.forEach((sourceMarker, index) => {
+    const targetMarker = targetMarkers[index];
+    const sourceMap = sourceMarker.closest(".report-map");
+    const targetMap = targetMarker && targetMarker.closest(".report-map");
+    const targetLayer = targetMarker && targetMarker.closest(".report-map-layer");
+    if (!targetMarker || !sourceMap || !targetMap || !targetLayer) return;
+
+    const sourceMarkerRect = sourceMarker.getBoundingClientRect();
+    const sourceMapRect = sourceMap.getBoundingClientRect();
+    const targetMapRect = targetMap.getBoundingClientRect();
+    const targetLayerRect = targetLayer.getBoundingClientRect();
+    const xInMap = sourceMarkerRect.left - sourceMapRect.left;
+    const yInMap = sourceMarkerRect.top - sourceMapRect.top;
+
+    targetMarker.style.left = `${xInMap - (targetLayerRect.left - targetMapRect.left)}px`;
+    targetMarker.style.top = `${yInMap - (targetLayerRect.top - targetMapRect.top)}px`;
+  });
+}
+
+async function createReportPdfBlob(onProgress) {
   if (!window.html2canvas || !window.jspdf || !window.jspdf.jsPDF) {
-    alert("PDF tools did not load. Check your internet connection and try again.");
-    return;
+    throw new Error("PDF tools did not load. Check your internet connection and try again.");
   }
 
-  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const pdfWindow = isIos ? window.open("", "_blank") : null;
-  if (pdfWindow) {
-    pdfWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Creating PDF...</p>");
-  }
-
-  const button = $("pdfBtn");
-  const originalText = button.textContent;
-  button.disabled = true;
-  button.textContent = "Creating PDF...";
   renderReport();
 
-  const report = $("printReport");
-  const sourceSheets = Array.from(report.children).filter((element) => element.classList.contains("sheet"));
+  const preview = $("reportPreview");
+  const printReport = $("printReport");
+  const sourceSheets = Array.from(preview.querySelectorAll(".sheet"));
+  const fallbackSheets = Array.from(printReport.children).filter((element) => element.classList.contains("sheet"));
+  const sheets = sourceSheets.length ? sourceSheets : fallbackSheets;
   const stage = document.createElement("div");
   stage.className = "pdf-render-stage";
   document.body.appendChild(stage);
 
   try {
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ orientation: "portrait", unit: "in", format: "letter", compress: true });
-    const captureScale = isIos ? 1.35 : 1.6;
+    const captureScale = isIos ? 1.05 : 1.25;
+    const jpegQuality = isIos ? 0.68 : 0.72;
 
-    for (let index = 0; index < sourceSheets.length; index += 1) {
-      button.textContent = `PDF page ${index + 1}/${sourceSheets.length}...`;
-      stage.replaceChildren(sourceSheets[index].cloneNode(true));
+    for (let index = 0; index < sheets.length; index += 1) {
+      if (onProgress) onProgress(index + 1, sheets.length);
+      stage.replaceChildren(sheets[index].cloneNode(true));
       await new Promise((resolve) => requestAnimationFrame(resolve));
 
       const sheet = stage.firstElementChild;
+      lockReportMarkerPositions(sheets[index], sheet);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+
       const bounds = sheet.getBoundingClientRect();
       const canvas = await window.html2canvas(sheet, {
         backgroundColor: "#ffffff",
@@ -1376,11 +1518,29 @@ async function savePdf() {
         scrollY: 0,
       });
       if (index > 0) pdf.addPage("letter", "portrait");
-      pdf.addImage(canvas.toDataURL("image/jpeg", 0.86), "JPEG", 0, 0, 8.5, 11, undefined, "FAST");
+      pdf.addImage(canvas.toDataURL("image/jpeg", jpegQuality), "JPEG", 0, 0, 8.5, 11, undefined, "FAST");
     }
 
-    const filename = `${safeFilePart(state.project.projectFileName || state.project.projectNumber || state.project.projectName)}.pdf`;
-    const blob = pdf.output("blob");
+    return pdf.output("blob");
+  } finally {
+    stage.remove();
+  }
+}
+
+async function savePdf() {
+  const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const pdfWindow = isIos ? window.open("", "_blank") : null;
+  if (pdfWindow) {
+    pdfWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Creating PDF...</p>");
+  }
+
+  setPdfButtons(true, "Creating PDF...");
+
+  try {
+    const filename = pdfFileName();
+    const blob = await createReportPdfBlob((page, total) => {
+      setPdfButtons(true, `PDF page ${page}/${total}...`);
+    });
     const url = URL.createObjectURL(blob);
 
     if (pdfWindow) {
@@ -1398,9 +1558,39 @@ async function savePdf() {
     if (pdfWindow) pdfWindow.close();
     alert(`PDF creation failed: ${error.message}`);
   } finally {
-    stage.remove();
-    button.disabled = false;
-    button.textContent = originalText;
+    setPdfButtons(false);
+  }
+}
+
+async function sharePdf() {
+  if (preparedPdfFile) {
+    try {
+      await sharePreparedPdf();
+    } catch (error) {
+      if (error.name !== "AbortError") {
+        alert("The browser blocked sharing. Tap Share PDF again and choose Egnyte from the share sheet.");
+      }
+    }
+    return;
+  }
+
+  setPdfButtons(true, "Creating PDF...");
+
+  try {
+    const filename = pdfFileName();
+    const blob = await createReportPdfBlob((page, total) => {
+      setPdfButtons(true, `PDF page ${page}/${total}...`);
+    });
+    preparedPdfFile = new File([blob], filename, { type: "application/pdf" });
+    updateShareReadyState(true);
+    alert("PDF is ready. Tap Share PDF again to open the share sheet.");
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      alert(`PDF sharing failed: ${error.message}`);
+    }
+  } finally {
+    setPdfButtons(false);
+    if (preparedPdfFile) updateShareReadyState(true);
   }
 }
 
@@ -1478,6 +1668,7 @@ function bindEvents() {
   $("photoRollInput").addEventListener("change", addPhotos);
   $("addPipeBtn").addEventListener("click", addPipe);
   $("pipeList").addEventListener("input", updatePipe);
+  $("pipeList").addEventListener("change", updatePipe);
   $("pipeList").addEventListener("click", (event) => {
     const aerialButton = event.target.closest(".pipe-aerial-btn");
     if (aerialButton) {
@@ -1494,6 +1685,8 @@ function bindEvents() {
     window.print();
   });
   $("pdfBtn").addEventListener("click", savePdf);
+  $("sharePdfBtn").addEventListener("click", sharePdf);
+  $("sharePdfActionBtn").addEventListener("click", sharePdf);
   $("csvBtn").addEventListener("click", exportCsv);
   $("geoJsonBtn").addEventListener("click", exportGeoJson);
   $("openProjectMapBtn").addEventListener("click", openProjectMap);
