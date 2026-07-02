@@ -203,13 +203,13 @@
   function drawLabel(ctx, hole, anchor, markerZoom, canvasWidth) {
     const title = String((hole && hole.holeName) || "TH");
     const utility = String((hole && (hole.utilityType || hole.holeName)) || "TH");
-    const labelX = anchor.x + 27 * markerZoom;
-    const labelY = anchor.y - 21 * markerZoom;
-    const paddingX = 5 * markerZoom;
-    const paddingY = 3 * markerZoom;
-    const maxTextWidth = Math.max(68 * markerZoom, Math.min(120 * markerZoom, canvasWidth - labelX - paddingX * 2 - 4));
-    const titleFont = `800 ${8.5 * markerZoom}px Arial, Helvetica, sans-serif`;
-    const utilityFont = `800 ${10 * markerZoom}px Arial, Helvetica, sans-serif`;
+    const labelX = anchor.x + 22 * markerZoom;
+    const labelY = anchor.y - 17 * markerZoom;
+    const paddingX = 4 * markerZoom;
+    const paddingY = 2 * markerZoom;
+    const maxTextWidth = Math.max(52 * markerZoom, Math.min(95 * markerZoom, canvasWidth - labelX - paddingX * 2 - 4));
+    const titleFont = `800 ${6.5 * markerZoom}px Arial, Helvetica, sans-serif`;
+    const utilityFont = `800 ${7.5 * markerZoom}px Arial, Helvetica, sans-serif`;
 
     ctx.save();
     ctx.font = utilityFont;
@@ -218,15 +218,15 @@
     const titleWidth = ctx.measureText(title).width;
     ctx.font = utilityFont;
     const utilityWidth = Math.max(...utilityLines.map((line) => ctx.measureText(line).width));
-    const labelWidth = Math.max(28 * markerZoom, titleWidth, utilityWidth) + paddingX * 2;
-    const titleHeight = 10 * markerZoom;
-    const lineHeight = 12.5 * markerZoom;
+    const labelWidth = Math.max(22 * markerZoom, titleWidth, utilityWidth) + paddingX * 2;
+    const titleHeight = 8 * markerZoom;
+    const lineHeight = 9.5 * markerZoom;
     const labelHeight = paddingY * 2 + titleHeight + utilityLines.length * lineHeight;
 
     ctx.fillStyle = "#1f4f47";
     ctx.strokeStyle = "#ffffff";
     ctx.lineWidth = Math.max(1.5, 2 * markerZoom);
-    roundedRect(ctx, labelX, labelY, labelWidth, labelHeight, 3 * markerZoom);
+    roundedRect(ctx, labelX, labelY, labelWidth, labelHeight, 2.5 * markerZoom);
     ctx.fill();
     ctx.stroke();
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "test-hole-collector-v129";
+const CACHE_NAME = "test-hole-collector-v130";
 const APP_SHELL = [
   "./",
   "./index.html",
